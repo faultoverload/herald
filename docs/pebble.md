@@ -288,7 +288,21 @@ Each phase ends in something testable on the user's phone and Time 2.
   - **So `setAuthenticationRequired` is only enforced by the system notification shade.** A notification listener (the Pebble app, Gadgetbridge, any app granted notification access) fires the `PendingIntent` directly, and `NotificationActionReceiver` doesn't check the lock itself.
   - On a gateway with approvals on, Approve would very likely go through from a locked phone the same way. Today that only happens with the Pebble "showsUserInterface" setting on, and the [#1](https://github.com/faultoverload/herald/issues/1) fix would make it the default.
   - **Consequence for #1:** don't ship `setShowsUserInterface(false)` on the Approve actions alone. Either pair it with a receiver-side lock check (`KeyguardManager.isDeviceLocked`, refusing Approve or opening an unlock prompt), or leave Approve as it is so it stays off the watch. This feeds decision 2 in §7.
-- **Still to do:** the ringing call (Test 3; expected not to mirror, since it is ongoing).
+- **Test 3b, the ringing call** ❌ **It doesn't reach the watch.**
+  - Herald's ring is a `CallStyle`, `CATEGORY_CALL`, ongoing notification with a full-screen intent.
+  - The Pebble app's [`NotificationCallDetector`](https://github.com/coredevices/mobileapp/blob/main/libpebble3/src/androidMain/kotlin/io/rebble/libpebblecommon/calls/NotificationCallDetector.kt) did see it (`Call notification from dev.herald.android (answer=true, decline=true)`). But by design it is a *passive store* that "does not drive call state": only telephony calls ring the watch, and the detector only lends them answer and decline actions. Nothing was sent to the watch for the 10 s it rang.
+  - After the call, Herald posted the question again: once quietly (`NotSentLocalOnly`, as designed), then as a normal notification. The normal one reached the watch at 16:26:18 (BlobDB insert succeeded), again with no actions (see §8).
+  - **Confirms the plan:** Pebble rings have to come from Herald's own watchapp (`PebbleRinger`, §4.4), not from mirroring.
+- **Phase 0 notification baseline: done.** Summary:
+
+  | Case | On the Pebble today, no code |
+  |---|---|
+  | Finished reply | Shows. Reply works only with *Enable showsUserInterface actions* on ([#1](https://github.com/faultoverload/herald/issues/1)) |
+  | Reply from the watch with the phone locked | Goes through; the unlock is skipped (§8) |
+  | Approval | Not tested: approvals are off on this gateway |
+  | Question | Shows, never answerable (§8) |
+  | Quiet request (`setLocalOnly`) | Not sent, as designed |
+  | Ringing call | Not shown |
 
 ### Phase 1: phone transport (Herald only; tested against the PebbleKit 2 sample or a stub watchapp)
 
