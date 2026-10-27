@@ -28,6 +28,8 @@ enum class PebbleSent {
  *   the watch asks again when it opens.
  * - When the app opens ([opened]) or the watch finds it was told to add text past its own ([resync]), the reply
  *   goes again from the start, so a watch reopened mid-turn catches up.
+ * - The turn's last update is tried again a few times, [finalRetryMs] apart, when it's lost: nothing comes after it
+ *   to carry it, and the watch would show the turn running until it reopened.
  *
  * Every call only queues; one coroutine in [scope] does the sending, so nothing here is shared between threads.
  */
@@ -36,6 +38,7 @@ class PebbleWatch(
     private val send: suspend (PebbleDict) -> PebbleSent,
     private val gapMs: Long = REPLY_GAP_MS,
     private val retryMs: Long = RETRY_MS,
+    private val finalRetryMs: Long = FINAL_RETRY_MS,
 ) {
     private sealed interface Event {
         data class Reply(val update: ReplyUpdate) : Event
@@ -73,6 +76,9 @@ class PebbleWatch(
     private val queue = ArrayDeque<PebbleDict>()
     private var latest: ReplyUpdate? = null
 
+    /** How often the turn's last update was tried again after it was lost. */
+    private var finalRounds = 0
+
     /** The ask the watch has, the part of its plain text the watch acknowledged, and the rest of the update it shows. */
     private var shownAsk: String? = null
     private var shownText = ""
@@ -90,6 +96,7 @@ class PebbleWatch(
     private fun apply(event: Event) {
         when (event) {
             is Event.Reply -> {
+                finalRounds = 0
                 val last = latest
                 // The newest wins; one that arrives late for the same ask would undo it.
                 if (last == null || last.askId != event.update.askId || event.update.seq >= last.seq) latest = event.update
@@ -127,7 +134,13 @@ class PebbleWatch(
                 continue
             }
             val next = nextReply() ?: return
-            if (!deliver(next.dict)) return
+            if (!deliver(next.dict)) {
+                if (!open || !next.terminal || finalRounds >= FINAL_ROUNDS) return
+                finalRounds++
+                delay(finalRetryMs)
+                continue
+            }
+            finalRounds = 0
             shownAsk = next.update.askId
             shownText = next.shownText
             shownState = next.update.withoutText()
@@ -176,6 +189,8 @@ class PebbleWatch(
         /** How often a streaming reply's updates go at most: each one is a Bluetooth round trip, and the watch redraws. */
         const val REPLY_GAP_MS = 800L
         const val RETRY_MS = 500L
+        const val FINAL_RETRY_MS = 5_000L
         private const val ATTEMPTS = 3
+        private const val FINAL_ROUNDS = 5
     }
 }

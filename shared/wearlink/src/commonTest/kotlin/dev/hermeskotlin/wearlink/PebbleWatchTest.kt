@@ -40,7 +40,7 @@ class PebbleWatchTest {
         val fake = FakeWatch()
         val scope = CoroutineScope(coroutineContext + Job())
         try {
-            body(fake, PebbleWatch(scope, { fake.receive(it) }, gapMs = 100, retryMs = 10))
+            body(fake, PebbleWatch(scope, { fake.receive(it) }, gapMs = 100, retryMs = 10, finalRetryMs = 1_000))
         } finally {
             scope.cancel()
         }
@@ -172,5 +172,25 @@ class PebbleWatchTest {
         assertEquals(PebbleValue.Text("p2"), last[PebbleKeys.ASK_ID])
         assertEquals(0, last.offset)
         assertEquals("", fake.text)
+    }
+
+    @Test
+    fun theTurnsLastUpdateIsTriedAgainWhenLost() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "Hello"))
+        advanceUntilIdle()
+        // A whole round of tries at Done fails; nothing else will come to carry it.
+        repeat(3) { fake.answers.addLast(PebbleSent.Failed) }
+        watch.reply(update(2, "Hello", ReplyPhase.Done))
+        advanceUntilIdle()
+        assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), fake.replies.last()[PebbleKeys.PHASE])
+        assertEquals(5, fake.replies.size)
+    }
+
+    @Test
+    fun aLostUpdateMidTurnWaitsForTheNext() = pebbleTest { fake, watch ->
+        repeat(3) { fake.answers.addLast(PebbleSent.Failed) }
+        watch.reply(update(1, "Hello"))
+        advanceUntilIdle()
+        assertEquals(3, fake.replies.size)
     }
 }

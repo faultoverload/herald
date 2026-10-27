@@ -345,8 +345,8 @@ Each phase ends in something testable on the user's phone and Time 2.
 - **Background wake** ✅ (§4.5).
 - **Closed mid-reply** ✅ *(per the logs)*
   - Closing the watchapp right after the first update (`AppRunStateStop`) stopped the sending.
-  - Reopening sent the reply again (181 bytes) before the status. Whether that was the whole reply in `Done` isn't in the logs; the "To the Pebble" line now logs the phase and length for next time.
-- **Known gap (fix in Phase 2):** if the final `Done`/`Failed` update fails all 3 tries while the app stays open, `PebbleWatch` doesn't try again, and the relay sends nothing after `Done`. The watch then stays on "Working…" until it's reopened. Re-arm a short retry while the latest reply is final and unacknowledged.
+  - Reopening sent the reply again (181 bytes) before the status, and the watch showed the whole reply with `Done` (confirmed by the user on the watch).
+- **Gap found, fixed in Phase 2:** if the final `Done`/`Failed` update failed all 3 tries while the app stayed open, nothing tried again, and the watch showed the turn running until reopened. `PebbleWatch` now retries a lost final update up to 5 more rounds, 5 s apart.
 - **Still the watch's job (Phase 2):** a real talk screen; the bare app only shows the status, the activity line and the reply. Buttons:
   - Select dictates;
   - a long Select sends a test ask;
