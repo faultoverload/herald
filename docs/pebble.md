@@ -147,18 +147,22 @@ What the Core app's source shows ✅:
 ### 4.1 Where the code goes
 
 ```
-shared/wearlink/…/PebbleLink.kt       Pebble message keys, types and the codec between WearLink models and int-keyed
-                                      dictionaries; UTF-8 byte clipping; markdown-to-plain text. Pure Kotlin, in commonTest.
+shared/wearlink/…/                    Pure Kotlin, tested in commonTest (and androidHostTest for package.json).
+  PebbleLink.kt                       Message keys and types, the app UUID, and the codec between WearLink models and
+                                      dictionaries.                                                    [Phase 1, built]
+  PebbleText.kt                       UTF-8 sizing and cutting at character boundaries; Markdown to plain text. [built]
+  PebbleWatch.kt                      One watch's sender: queue, chunked reply streaming, replay, resync.       [built]
 androidApp/…/pebble/
-  PebbleBridgeService.kt              BasePebbleListenerService: decodes asks, stops, chat and status requests; onAppOpened
-                                      replays the last reply.
-  PebbleOutbox.kt                     WatchOutbox over DefaultPebbleSender: one message in flight, latest wins, ~1/s.
-  RoutingOutbox.kt                    Picks PebbleOutbox or PhoneOutbox by node id.
-  PebbleRinger.kt                     Rings Pebbles (rules in §4.4), reports back to ChatNotifications.
-  PebbleModule.kt                     Koin wiring; a Settings → Watch "Pebble" switch and the companion-app picker.
+  PebbleBridgeService.kt              BasePebbleListenerService: asks, stops, chat and status requests, resyncs;
+                                      onAppOpened / onAppClosed.                                         [built]
+  PebbleOutbox.kt                     WatchOutbox over DefaultPebbleSender, one PebbleWatch per watch.     [built]
+  RoutingOutbox.kt                    Picks PebbleOutbox or the Wear Data Layer by node id (bound in WearModule). [built]
+  PebbleApps.kt                       Turns PebbleKit's auto-select off and picks the Core app by name.   [built]
+  PebbleRinger.kt                     Rings Pebbles (rules in §4.4), reports back to ChatNotifications.   [Phase 3]
+  (Settings → Watch: a "Pebble" switch and a picker for other Pebble apps)                                 [later]
 pebbleApp/                            The C watchapp (pebble-tool project; not part of Gradle).
-  package.json                        uuid, messageKeys (the source of truth), companionApp, targetPlatforms.
-  src/c/{main,link,talk,chats,ring,glance,colors}.c
+  package.json                        uuid, messageKeys with explicit numbers (the source of truth), companionApp.
+  src/c/main.c                        Phase 1's bare test app; split into talk, chats, ring, glance in Phase 2+.
 ```
 
 ### 4.2 Wire protocol (new, compact)
@@ -169,30 +173,35 @@ The Wear JSON protocol stays untouched. `PebbleOutbox` **decodes the JSON for ea
 
   | TYPE | Direction | Carries |
   |---|---|---|
-  | `ASK` | Watch → phone | `ASK_ID`, `TEXT`, `CHAT_ID?`, `speak=false` |
+  | `ASK` | Watch → phone | `ASK_ID`, `TEXT`, `CHAT_ID?` (the phone always asks with `speak=false`) |
   | `STOP` | Watch → phone | `ASK_ID` |
   | `CHATS_REQ` | Watch → phone | — |
   | `STATUS_REQ` | Watch → phone | `ACCENT_REV` |
   | `RING_ON` | Watch → phone | `REQUEST_ID` |
   | `RING_END` | Watch → phone | `REQUEST_ID`, `ANSWERED` |
-  | `REPLY` | Phone → watch | `ASK_ID`, `SEQ`, `PHASE`, `ACTIVITY`, `TITLE`, `TEXT`, `TEXT_OFFSET`, `ERROR` |
+  | `RESYNC` | Watch → phone | `ASK_ID` (told to add past its text: send the reply again from 0) |
+  | `REPLY` | Phone → watch | `ASK_ID`, `SEQ`, `PHASE`, `CHAT_ID`, `ACTIVITY`, `TITLE`, `ERROR`, `TEXT`, `TEXT_OFFSET`, `TEXT_TOTAL` |
   | `CHAT_ITEM` | Phone → watch | `INDEX`, `COUNT`, `CHAT_ID`, `TITLE`, `AGO` |
-  | `STATUS` | Phone → watch | flags and the 4 accent colours |
+  | `STATUS` | Phone → watch | `VERSION`, `FLAGS`, and the accent (`ACCENT_REV` and 4 RGB colours) when the watch's is out of date |
   | `RING` | Phone → watch | `REQUEST_ID`, `CHAT_ID`, `TITLE`, `APPROVAL`, `AGENT` |
   | `RING_END` | Phone → watch | `REQUEST_ID` |
 
-- **Keys come from `pebbleApp/package.json` `messageKeys`**, which the build turns into C `MESSAGE_KEY_*`. A JVM test reads that file and fails if `PebbleLink`'s numeric keys drift from it. It lives in a new `shared/wearlink/src/androidHostTest`, because `commonTest` has no file I/O.
-- **Budget for each message:** the watch asks for about 2 KB inbox and 512 B outbox (to be tuned, since both come out of the heap).
+- **Keys come from `pebbleApp/package.json` `messageKeys`**, written as an object with explicit numbers (`"TYPE": 1`, …), which the SDK keeps as given (verified: `MESSAGE_KEY_TYPE = 1`). A JVM test reads that file and fails if `PebbleKeys`' numbers, the UUID or the companion packages drift from it. It lives in a new `shared/wearlink/src/androidHostTest`, because `commonTest` has no file I/O.
+- **Numbers** go as 32-bit integers both ways; the watchapp reads each by its length, and PebbleKit hands the phone every number as `Int32`/`UInt32` anyway.
+- **Budget for each message:** the watch opens a 2,048-byte inbox and a 512-byte outbox. A reply chunk is at most 1,024 bytes of text, and a test checks that a reply with every field at its longest still fits the inbox (`dict_calc_buffer_size` rules: 7 bytes per value, text with its NUL).
   - `PebbleOutbox` clips `TEXT` by **UTF-8 bytes** at a code-point boundary. Wear's `MAX_WATCH_TEXT` is 24,000 *characters*, which is useless here.
   - The whole reply kept on the watch is capped at about 6 KB, with an ellipsis.
-- **Streaming:** `WatchRelay` resends the whole reply every 400 ms. `PebbleOutbox` turns that into **append-only deltas**:
-  - Each delta is computed against the last **acked** offset for that watch, never against the last update built. A dropped or NACKed tail is then simply resent as part of the next delta.
-  - The watch NACKs any `TEXT_OFFSET` that isn't its current text length. The phone then falls back to a replace.
-  - A replace is a run of chunks from offset 0, each fitting the inbox (about 6 KB of reply won't fit a 2 KB inbox in one go).
-  - One message is in flight at a time, at about 1 per second. Only *unsent* updates are dropped, the latest `SEQ` winning. Nothing already sent is skipped, so the text can't silently corrupt.
+- **Streaming:** `WatchRelay` resends the whole reply every 400 ms. `PebbleWatch` turns that into **placed pieces**:
+  - Each piece is computed against what the watch **acknowledged** (PebbleKit's `Success`), never against the last update built. A lost piece is just part of the next one.
+  - The watch sets its text's length to `TEXT_OFFSET`, then appends the piece. That makes a piece sent twice harmless, and offset 0 a replace. (A C inbox handler can't NACK; the ACK is automatic.)
+  - Only an offset past the watch's length is wrong (it restarted unseen): it sends `RESYNC`, and the phone sends the reply again from 0.
+  - A text that changed other than by growing goes again from 0, as pieces that each fit the inbox.
+  - One message is in flight at a time; while streaming, at most one every 800 ms. Only *unsent* updates are dropped, the latest `SEQ` winning. An update that changes nothing the watch shows (only its `SEQ`) isn't sent.
+  - Failures: `FailedTimeout`/`FailedWatchNacked` are tried 3 times; `FailedDifferentAppOpen`/`FailedWatchNotConnected` stop all sending until the app opens again, and queued messages (status, chats) are dropped, since the watch asks again on opening.
 - **Plain text:** strip markdown (code fences, headings, links) before sending. The watch draws plain text in a `ScrollLayer`.
 - **Speech:** the watch always sends `speak=false` for now, so the relay never voices. `PebbleOutbox.stream()` returns `false`.
-- **Replay:** `PebbleOutbox` keeps the last `REPLY` for each watch. `onAppOpened` resends it, and so does a `STATUS_REQ`. Reopening the app mid-turn then shows where things stand.
+- **Replay:** `PebbleWatch` keeps the newest `REPLY` for its watch. `onAppOpened` sends it again from 0, so reopening the app mid-turn (or after it) shows where things stand. Verified on the device (Phase 1 results).
+- **Who may send:** the bridge is exported for the Pebble app to bind. PebbleKit's `BasePebbleListenerService` drops any call whose caller (by binder uid) isn't the Pebble app picked in `DefaultPebbleAndroidAppPicker`; Herald turns auto-select off and picks only `coredevices.coreapp` (`PebbleApps`). Without that, any app could start Hermes turns through it.
 
 ### 4.3 Node identity
 
@@ -216,12 +225,11 @@ Either way, the AppGlance is updated the next time the app runs.
 
 ### 4.5 Background wake (a risk, spiked first)
 
-On Wear, `keepUp()` starts `ChatService` as a foreground service from inside the Data Layer callback, because Play Services grants a temporary allowlist to start one. It is **unverified** ❓ whether a PebbleKit 2 bound-service callback lets Herald start a foreground service on Android 14+ with Herald fully closed. If it doesn't, the relay stalls.
+On Wear, `keepUp()` starts `ChatService` as a foreground service from inside the Data Layer callback, because Play Services grants a temporary allowlist to start one.
 
-Fallbacks, in order:
+**Spiked in Phase 1 ✅: it works on Android 17.** With Herald Dev swiped away (`Killing … remove task`), opening the watchapp made Android start Herald's process for the Pebble app's binding (`Start proc … for bound-service PebbleBridgeService`). The ask then started `ChatService` from the background: `Background started FGS: Allowed … uidState: FGS`. Being bound by the Pebble app, which runs a foreground service, lends Herald that state. The turn finished after the watchapp was closed mid-reply, and Herald's process stayed up.
 
-1. The Pebble app's binding keeps us alive enough to run the turn without a foreground service.
-2. Ask the user to exempt Herald from battery optimisation, which lifts the background-start ban. A foreground service *type* such as `connectedDevice` doesn't lift it on its own.
+The fallback, should a later Android or another Pebble app change that: ask the user to exempt Herald from battery optimisation, which lifts the background-start ban. A foreground service *type* such as `connectedDevice` doesn't lift it on its own.
 
 ---
 
@@ -304,9 +312,9 @@ Each phase ends in something testable on the user's phone and Time 2.
   | Quiet request (`setLocalOnly`) | Not sent, as designed |
   | Ringing call | Not shown |
 
-### Phase 1: phone transport (Herald only; tested against the PebbleKit 2 sample or a stub watchapp)
+### Phase 1: phone transport ✅ done (2026-10-27)
 
-1. Add `io.rebble.pebblekit2:client` and `client-ui` to `libs.versions.toml` and `androidApp`.
+1. Add `io.rebble.pebblekit2:client` to `libs.versions.toml` and `androidApp` (`client-ui` waits for the Settings picker).
 2. `PebbleLink` codec in `shared/wearlink`, with tests:
    - Key table versus `package.json`.
    - UTF-8 clipping, including emoji at the cut.
@@ -315,9 +323,37 @@ Each phase ends in something testable on the user's phone and Time 2.
    - Round-trip of every type.
 3. `RoutingOutbox`, `PebbleOutbox` (in-flight queue, latest wins, replay cache) and `PebbleBridgeService` (manifest entry with the `RECEIVE_DATA_FROM_WATCH` action).
 4. **Spike: background wake (§4.5)** with Herald swiped away, on Android 14+. **Gate:** don't build the watchapp until a turn completes from a closed phone app.
-5. Settings → Watch: a "Pebble" switch and the companion-app picker (`enableAutoSelect = false`).
+5. ~~Settings → Watch: a "Pebble" switch and the companion-app picker~~ **Moved to Phase 4.** For now `PebbleApps` turns auto-select off and picks the Core app by name.
 
-*Exit:* a stub watchapp (the sample with our keys) sends `ASK "hello"` and logs streamed `REPLY` deltas through to `Done`.
+*Exit:* a stub watchapp sends an ask and gets the streamed reply through to `Done`.
+
+#### Phase 1 results
+
+**Setup:** Herald Dev (`./gradlew :androidApp:assembleDev`, `dev.herald.android.dev`, R8-minified) on the Pixel 9a, signed in to the gateway, and the bare watchapp in `pebbleApp/` on the Time 2.
+
+- **Tests:** 26 new tests in `shared/wearlink`, all passing with the 22 existing ones:
+  - codec and size limits (`PebbleLinkTest`);
+  - UTF-8 and Markdown (`PebbleTextTest`);
+  - streaming, replace, chunking, latest-wins, closed app, reopen and resync (`PebbleWatchTest`);
+  - the `package.json` keys, UUID and packages (`PebbleAppTest`).
+
+  `:androidApp:lintDebug` has no new issues.
+- **Round trip on the device** ✅
+  - Dictated asks (the Core app transcribed them with `LocalFirst`, on the phone) reached the bridge.
+  - Each reply streamed back in about 5 pieces, every one ACKed and none NACKed.
+  - The PebbleKit library works under R8 with no keep rules of Herald's own.
+- **Background wake** ✅ (§4.5).
+- **Closed mid-reply** ✅
+  - Closing the watchapp right after the first update (`AppRunStateStop`) stopped the sending.
+  - The turn finished on the phone.
+  - Reopening sent the reply again before the status.
+- **Still the watch's job (Phase 2):** a real talk screen; the bare app only shows the status, the activity line and the reply. Buttons:
+  - Select dictates;
+  - a long Select sends a test ask;
+  - Down starts a new chat;
+  - Up asks for the status;
+  - a long Up stops the turn;
+  - Back leaves.
 
 ### Phase 2: watchapp MVP (talk)
 
@@ -345,6 +381,7 @@ Each phase ends in something testable on the user's phone and Time 2.
 
 ### Phase 4: glanceables and polish
 
+0. Settings → Watch: a "Pebble" switch and a picker for Pebble apps other than the Core app (PebbleKit's `client-ui`), moved here from Phase 1.
 1. Quick launch straight into dictation (the tile equivalent).
 2. AppGlance with the last reply's first line, or "Working…" (the complication equivalent).
 3. The accent colour mapped to `GColor`; the status sends only when the accent revision changes.
