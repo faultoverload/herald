@@ -100,7 +100,8 @@ What the Core app's source shows ✅:
 - It **prefers `WearableExtender` actions** when a notification has them.
 - It **ignores ongoing notifications.** Herald's ringing "call" notification is ongoing, so it won't show.
 - It skips `setLocalOnly` notifications.
-- By default it sends nothing while the phone is unlocked and its screen is on.
+- It **drops actions marked `showsUserInterface`** (the `NotificationCompat` default) unless *Enable showsUserInterface actions* is on in the Pebble app. Herald's actions are all marked that way today (see Phase 0 findings).
+- *(The earlier claim that it sends nothing while the phone is unlocked was wrong: `alwaysSendNotifications` defaults to `true`.)*
 
 **Never tested on a watch** ❓: whether Herald's existing reply and approval notifications already work on a Pebble with no code.
 
@@ -270,7 +271,14 @@ Each phase ends in something testable on the user's phone and Time 2.
   - Phone → watch: `startAppOnTheWatch` returned `Success`, followed by `onAppOpened`. `sendDataToPebble` with a text item returned `Success`, and the text showed on the watch, confirmed by screenshot.
   - `onAppClosed` fires when the app is left.
   - No permission prompt appeared for the sample (its `companionApp` entry was enough).
-- **Still to do:** the zero-code notification baseline and the approval-unlock security check (item 4 and item 5 above). Both need Herald signed in to a test gateway.
+- **Notification baseline, Test 1 (finished reply)** ✅ with a setting
+  - The reply notification reaches the watch. **Its Reply action is dropped by default.**
+  - Why: Herald builds its actions with `NotificationCompat.Action.Builder`, which defaults `showsUserInterface` to `true`. The Pebble app [drops such actions](https://github.com/coredevices/mobileapp/blob/main/libpebble3/src/androidMain/kotlin/io/rebble/libpebblecommon/notification/LibPebbleNotificationAction.kt) unless `addShowsUserInterfaceActions` is set, and that is off by default.
+  - **Requirement today:** in the Pebble app, turn on *Settings → Phone → Notifications → Enable showsUserInterface actions*.
+  - With that on, Reply appears. A dictated reply went through the `RemoteInput` (`handleReply() actionIntent result code: 0`), and Herald sent it to the chat.
+  - **Fix in Herald:** mark the Reply, Approve and Answer actions `setShowsUserInterface(false)`, since they go to `NotificationActionReceiver` and open no screen. Tracked in [faultoverload/herald#1](https://github.com/faultoverload/herald/issues/1), to send upstream.
+  - Correction to §2: the Pebble app's `alwaysSendNotifications` defaults to `true`, so notifications are sent even while the phone is unlocked with its screen on.
+- **Still to do:** the approval-unlock security check (Test 2), questions, and the ringing call (Test 3).
 
 ### Phase 1: phone transport (Herald only; tested against the PebbleKit 2 sample or a stub watchapp)
 
