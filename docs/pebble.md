@@ -227,7 +227,7 @@ Either way, the AppGlance is updated the next time the app runs.
 
 On Wear, `keepUp()` starts `ChatService` as a foreground service from inside the Data Layer callback, because Play Services grants a temporary allowlist to start one.
 
-**Spiked in Phase 1 ✅: it works on Android 17.** With Herald Dev swiped away (`Killing … remove task`), opening the watchapp made Android start Herald's process for the Pebble app's binding (`Start proc … for bound-service PebbleBridgeService`). The ask then started `ChatService` from the background: `Background started FGS: Allowed … uidState: FGS`. Being bound by the Pebble app, which runs a foreground service, lends Herald that state. The turn finished after the watchapp was closed mid-reply, and Herald's process stayed up.
+**Spiked in Phase 1 ✅: it works on Android 17.** With Herald Dev swiped away (`Killing … remove task`), opening the watchapp made Android start Herald's process for the Pebble app's binding (`Start proc … for bound-service PebbleBridgeService`). The ask then started `ChatService` from the background: `Background started FGS: Allowed … uidState: FGS`. Being bound by the Pebble app, which runs a foreground service, appears to lend Herald that state (inferred from `uidState: FGS`). Herald's process stayed up after the watchapp was closed mid-reply.
 
 The fallback, should a later Android or another Pebble app change that: ask the user to exempt Herald from battery optimisation, which lifts the background-start ban. A foreground service *type* such as `connectedDevice` doesn't lift it on its own.
 
@@ -340,13 +340,13 @@ Each phase ends in something testable on the user's phone and Time 2.
   `:androidApp:lintDebug` has no new issues.
 - **Round trip on the device** ✅
   - Dictated asks (the Core app transcribed them with `LocalFirst`, on the phone) reached the bridge.
-  - Each reply streamed back in about 5 pieces, every one ACKed and none NACKed.
+  - Each reply streamed back in about 5 pieces, every one ACKed and none NACKed. *(From the logs; the outbox log didn't record the phase, so reaching `Done` is confirmed only where the user saw it on the watch.)*
   - The PebbleKit library works under R8 with no keep rules of Herald's own.
 - **Background wake** ✅ (§4.5).
-- **Closed mid-reply** ✅
+- **Closed mid-reply** ✅ *(per the logs)*
   - Closing the watchapp right after the first update (`AppRunStateStop`) stopped the sending.
-  - The turn finished on the phone.
-  - Reopening sent the reply again before the status.
+  - Reopening sent the reply again (181 bytes) before the status. Whether that was the whole reply in `Done` isn't in the logs; the "To the Pebble" line now logs the phase and length for next time.
+- **Known gap (fix in Phase 2):** if the final `Done`/`Failed` update fails all 3 tries while the app stays open, `PebbleWatch` doesn't try again, and the relay sends nothing after `Done`. The watch then stays on "Working…" until it's reopened. Re-arm a short retry while the latest reply is final and unacknowledged.
 - **Still the watch's job (Phase 2):** a real talk screen; the bare app only shows the status, the activity line and the reply. Buttons:
   - Select dictates;
   - a long Select sends a test ask;

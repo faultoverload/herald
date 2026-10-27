@@ -63,7 +63,7 @@ class PebbleOutbox(private val context: Context, private val scope: CoroutineSco
         val results = sender.sendDataToPebble(APP_UUID, dict.toPebbleKit(), listOf(watch)) ?: return PebbleSent.NotOpen
         return when (val result = results[watch]) {
             TransmissionResult.Success -> {
-                Log.d(TAG, "To the Pebble: type ${dict[PebbleKeys.TYPE]}, ${PebbleLink.size(dict)} bytes")
+                Log.d(TAG, "To the Pebble: type ${dict[PebbleKeys.TYPE]}, phase ${dict[PebbleKeys.PHASE]}, text ${dict[PebbleKeys.TEXT_TOTAL]}, ${PebbleLink.size(dict)} bytes")
                 PebbleSent.Sent
             }
             TransmissionResult.FailedDifferentAppOpen, TransmissionResult.FailedWatchNotConnected -> PebbleSent.NotOpen
