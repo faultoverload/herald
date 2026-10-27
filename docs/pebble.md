@@ -253,6 +253,25 @@ Each phase ends in something testable on the user's phone and Time 2.
 
 *Exit:* a short findings note appended to this doc, and the decisions in §7 made.
 
+#### Phase 0 findings so far (2026-10-27)
+
+**Setup used:** Pixel 9a on Android 17, Core Pebble app 1.15.0.1, Pebble Time 2, pebble-tool 5.0.40 with SDK 4.33.1.
+
+- **Toolchain** ✅
+  - Installed with `uv tool install --python 3.13 pebble-tool`, then `pebble sdk install latest`.
+  - The PebbleKit 2 sample watchapp builds for every platform.
+  - The sample's Android app (compileSdk 37, AGP 9.4.1) builds against a user-owned SDK in `~/Android/Sdk`. The AUR has no API 37 platform package. Install `android-sdk-cmdline-tools-latest`, accept the licenses with `sdkmanager --sdk_root=$HOME/Android/Sdk --licenses`, and the Gradle build downloads the platform and build-tools itself.
+- **Developer Connection** ✅
+  - It defaults to the **CloudPebble proxy**, so `pebble install --phone <ip>` is refused until *Settings → Phone → Connectivity → Use LAN developer connection* is on and the Dev Connection toggle is cycled.
+  - After that, `pebble install --phone`, `pebble logs --phone` and `pebble screenshot --phone` all work.
+  - LAN mode has no sign-in, so turn it off off-network.
+- **PebbleKit 2 round trip** ✅
+  - Watch → phone: a button press reached `BasePebbleListenerService.onMessageReceived` as `{1=UInt32(2)}`, with `WatchIdentifier(C111131100QK)`.
+  - Phone → watch: `startAppOnTheWatch` returned `Success`, followed by `onAppOpened`. `sendDataToPebble` with a text item returned `Success`, and the text showed on the watch, confirmed by screenshot.
+  - `onAppClosed` fires when the app is left.
+  - No permission prompt appeared for the sample (its `companionApp` entry was enough).
+- **Still to do:** the zero-code notification baseline and the approval-unlock security check (item 4 and item 5 above). Both need Herald signed in to a test gateway.
+
 ### Phase 1: phone transport (Herald only; tested against the PebbleKit 2 sample or a stub watchapp)
 
 1. Add `io.rebble.pebblekit2:client` and `client-ui` to `libs.versions.toml` and `androidApp`.
