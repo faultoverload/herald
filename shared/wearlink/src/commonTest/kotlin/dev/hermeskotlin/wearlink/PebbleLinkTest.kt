@@ -1,0 +1,96 @@
+package dev.hermeskotlin.wearlink
+
+import dev.hermeskotlin.wearlink.PebbleLink.toWatchAsk
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class PebbleLinkTest {
+
+    private fun num(value: Int) = PebbleValue.Num(value)
+    private fun text(value: String) = PebbleValue.Text(value)
+
+    @Test
+    fun anAskFromTheWatchIsNeverReadAloudAndABlankChatIsANewOne() {
+        val dict = mapOf(PebbleKeys.TYPE to num(PebbleTypes.ASK), PebbleKeys.ASK_ID to text("p1"), PebbleKeys.TEXT to text("hello"), PebbleKeys.CHAT_ID to text(""))
+        val ask = PebbleLink.decode(dict) as PebbleIncoming.Ask
+        assertEquals(WatchAsk(id = "p1", text = "hello", chatId = null, speak = false), ask.toWatchAsk())
+    }
+
+    @Test
+    fun whatTheWatchSendsWithoutItsIdsOrOfAnUnknownTypeIsNothing() {
+        assertNull(PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.ASK), PebbleKeys.TEXT to text("hello"))))
+        assertNull(PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STOP))))
+        assertNull(PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(42))))
+        assertNull(PebbleLink.decode(mapOf(PebbleKeys.TEXT to text("no type"))))
+    }
+
+    @Test
+    fun theOtherRequestsReadAsTheyWereSent() {
+        assertEquals(PebbleIncoming.ChatsRequest, PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.CHATS_REQ))))
+        assertEquals(PebbleIncoming.StatusRequest(null), PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS_REQ))))
+        assertEquals(
+            PebbleIncoming.StatusRequest("rev"),
+            PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS_REQ), PebbleKeys.ACCENT_REV to text("rev"))),
+        )
+        assertEquals(PebbleIncoming.Stop("p1"), PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STOP), PebbleKeys.ASK_ID to text("p1"))))
+        assertEquals(
+            PebbleIncoming.RingEnd("r1", answered = true),
+            PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.RING_END_FROM_WATCH), PebbleKeys.REQUEST_ID to text("r1"), PebbleKeys.ANSWERED to num(1))),
+        )
+        assertEquals(PebbleIncoming.Resync("p1"), PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.RESYNC), PebbleKeys.ASK_ID to text("p1"))))
+    }
+
+    @Test
+    fun theStatusCarriesItsFlagsAndTheAccentAsPlainRgb() {
+        val accent = WatchAccent.of(fill = 0xFF8A2BE2.toInt(), text = 0xFFFFFFFF.toInt(), onFill = 0xFF000000.toInt(), dim = 0x80123456.toInt())
+        val dict = PebbleLink.status(PhoneStatus(signedIn = true, connected = false, failed = true, accent = accent))
+        assertEquals(num(PebbleTypes.STATUS), dict[PebbleKeys.TYPE])
+        assertEquals(num(PebbleLink.FLAG_SIGNED_IN or PebbleLink.FLAG_FAILED), dict[PebbleKeys.FLAGS])
+        assertEquals(num(0x8A2BE2), dict[PebbleKeys.ACCENT_FILL])
+        assertEquals(num(0x123456), dict[PebbleKeys.ACCENT_DIM])
+        assertEquals(text(accent.revision), dict[PebbleKeys.ACCENT_REV])
+        assertNull(PebbleLink.status(PhoneStatus(signedIn = false, connected = false))[PebbleKeys.ACCENT_FILL])
+    }
+
+    @Test
+    fun eachChatIsItsOwnMessageAndAnEmptyListIsOneWithItsError() {
+        val now = 1_000_000.0
+        val list = ChatList(listOf(WatchChat("a", "First", now - 30), WatchChat("b", "Second", now - 7_200), WatchChat("c", "Third", null)))
+        val items = PebbleLink.chats(list, now)
+        assertEquals(3, items.size)
+        assertEquals(listOf(0, 1, 2), items.map { (it[PebbleKeys.INDEX] as PebbleValue.Num).value })
+        assertTrue(items.all { it[PebbleKeys.COUNT] == num(3) })
+        assertEquals(listOf("now", "2h", null), items.map { (it[PebbleKeys.AGO] as? PebbleValue.Text)?.value })
+
+        val failed = PebbleLink.chats(ChatList(error = "Sign in to Herald on your phone first."), now).single()
+        assertEquals(num(0), failed[PebbleKeys.COUNT])
+        assertEquals(text("Sign in to Herald on your phone first."), failed[PebbleKeys.ERROR])
+    }
+
+    @Test
+    fun aReplyAtItsLongestStillFitsTheWatchsInbox() {
+        val long = "x".repeat(500)
+        val update = ReplyUpdate(
+            askId = "p" + "9".repeat(15),
+            phase = ReplyPhase.Failed,
+            seq = Int.MAX_VALUE,
+            chatId = "20261027_044722_e4d150",
+            title = long,
+            activity = long,
+            error = long,
+        )
+        // A chunk of four-byte characters, as many as fit.
+        val chunk = takeUtf8("🙂".repeat(1_000), PebbleLink.CHUNK_BYTES)
+        val dict = PebbleLink.reply(update, offset = 0, chunk = chunk, total = 5_000)
+        assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES, "size ${PebbleLink.size(dict)}")
+    }
+
+    @Test
+    fun everyChatItemFitsTheWatchsInbox() {
+        val chat = WatchChat("2".repeat(40), "Ü".repeat(80), 0.0)
+        val item = PebbleLink.chats(ChatList(listOf(chat)), 1.0).single()
+        assertTrue(PebbleLink.size(item) <= PebbleLink.WATCH_INBOX_BYTES)
+    }
+}
