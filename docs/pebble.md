@@ -278,7 +278,17 @@ Each phase ends in something testable on the user's phone and Time 2.
   - With that on, Reply appears. A dictated reply went through the `RemoteInput` (`handleReply() actionIntent result code: 0`), and Herald sent it to the chat.
   - **Fix in Herald:** mark the Reply, Approve and Answer actions `setShowsUserInterface(false)`, since they go to `NotificationActionReceiver` and open no screen. Tracked in [faultoverload/herald#1](https://github.com/faultoverload/herald/issues/1), to send upstream.
   - Correction to §2: the Pebble app's `alwaysSendNotifications` defaults to `true`, so notifications are sent even while the phone is unlocked with its screen on.
-- **Still to do:** the approval-unlock security check (Test 2), questions, and the ringing call (Test 3).
+- **Test 2 (approval) couldn't run:** this gateway has command approvals turned off.
+  - A question notification (Hermes's clarify tool) arrived with `actions = null`. Herald only adds **Answer** for a single, non-multi-select question that isn't in batch form (`qid` set; `ChatNotifications.postRequest`). Otherwise it shows no buttons on the phone either.
+  - Still to check: whether current Hermes sends every question in batch form, which would mean questions are never answerable from a notification.
+- **Test 2b, the unlock check, using Reply instead** ❌ **The unlock is skipped.** This is an **upstream risk** in Herald, not something the Pebble work introduced; it is listed in §8 for a future patch.
+  - Reply carries the same `setAuthenticationRequired(true)` as Approve and Answer.
+  - The phone was locked by the power button at 16:15:18 (`locking without delay due to "power button"`, `isDeviceUnlocked=false`).
+  - A dictated reply from the watch fired at 16:16:10 (`handleReply() actionIntent result code: 0`), with the screen off until 16:16:38. Herald sent it to the chat.
+  - **So `setAuthenticationRequired` is only enforced by the system notification shade.** A notification listener (the Pebble app, Gadgetbridge, any app granted notification access) fires the `PendingIntent` directly, and `NotificationActionReceiver` doesn't check the lock itself.
+  - On a gateway with approvals on, Approve would very likely go through from a locked phone the same way. Today that only happens with the Pebble "showsUserInterface" setting on, and the [#1](https://github.com/faultoverload/herald/issues/1) fix would make it the default.
+  - **Consequence for #1:** don't ship `setShowsUserInterface(false)` on the Approve actions alone. Either pair it with a receiver-side lock check (`KeyguardManager.isDeviceLocked`, refusing Approve or opening an unlock prompt), or leave Approve as it is so it stays off the watch. This feeds decision 2 in §7.
+- **Still to do:** the ringing call (Test 3; expected not to mirror, since it is ongoing).
 
 ### Phase 1: phone transport (Herald only; tested against the PebbleKit 2 sample or a stub watchapp)
 
@@ -382,3 +392,14 @@ Device test script for each phase:
 4. **C or Alloy.** The suggestion is C: it has the full API, runs on every model, and the reference sample is in C.
 5. **Which Pebble models** count as done: Time 2 only, or every model in Phase 5.
 6. **Which phone Pebble app** to support: the Core app (≥ 1.0.7.7), plus microPebble if it's easy (PebbleKit 2 supports both).
+
+---
+
+## 8. Upstream risks
+
+Problems found in Herald itself while doing this work. The Pebble work doesn't fix them; each is left for a future patch.
+
+| Risk | Where | Effect | Suggested patch |
+|---|---|---|---|
+| Notification actions skip the unlock when fired by a notification listener | `ChatNotifications` (actions with `setAuthenticationRequired(true)`), `NotificationActionReceiver` | Reply, Answer, and very likely Approve (not tested, since this gateway has approvals off) can be fired with the phone locked by any app with notification access: the Pebble app, Gadgetbridge, others. Confirmed for Reply from a Pebble in Phase 0 Test 2b | In `NotificationActionReceiver`, check `KeyguardManager.isDeviceLocked` for Approve (and decide for Answer and Reply). When locked, refuse, or post an "unlock to approve" prompt. Must land before or with [#1](https://github.com/faultoverload/herald/issues/1), which would put Approve on Pebbles by default |
+| Questions in batch form get no Answer action | `ChatNotifications.postRequest` | A question with `qid` (batch), multi-select or several questions shows no buttons on the phone or watch | Check whether current Hermes always sends batch form. If it does, offer Answer for a single-question batch |
