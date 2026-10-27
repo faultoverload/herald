@@ -46,6 +46,7 @@ class PebbleWatch(
         data object Opened : Event
         data object Closed : Event
         data class Resync(val askId: String) : Event
+        data class Stopped(val askId: String) : Event
     }
 
     private val events = Channel<Event>(Channel.UNLIMITED)
@@ -69,6 +70,14 @@ class PebbleWatch(
 
     fun resync(askId: String) {
         events.trySend(Event.Resync(askId))
+    }
+
+    /**
+     * The watch stopped the turn for [askId]. The relay then tells it nothing more, so the reply kept for it ends
+     * here, as the watch already shows it: reopened, it shouldn't show the turn running again.
+     */
+    fun stopped(askId: String) {
+        events.trySend(Event.Stopped(askId))
     }
 
     // Only the sending coroutine touches these.
@@ -111,6 +120,8 @@ class PebbleWatch(
                 queue.clear()
             }
             is Event.Resync -> if (event.askId == shownAsk) forgetShown()
+            is Event.Stopped -> latest = latest?.takeIf { it.askId == event.askId && it.phase != ReplyPhase.Failed }
+                ?.copy(phase = ReplyPhase.Done, activity = null) ?: latest
         }
     }
 

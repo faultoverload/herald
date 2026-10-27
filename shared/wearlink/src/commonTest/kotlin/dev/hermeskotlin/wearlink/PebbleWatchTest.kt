@@ -193,4 +193,21 @@ class PebbleWatchTest {
         advanceUntilIdle()
         assertEquals(3, fake.replies.size)
     }
+
+    @Test
+    fun aStoppedTurnEndsAsDoneWithWhatCameSoFar() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "Half an ans", activity = "Running terminal"))
+        advanceUntilIdle()
+        watch.stopped("p1")
+        advanceUntilIdle()
+        val last = fake.replies.last()
+        assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), last[PebbleKeys.PHASE])
+        assertEquals(null, last[PebbleKeys.ACTIVITY])
+        // Reopened later, it's still over.
+        fake.text = ""
+        watch.opened()
+        advanceUntilIdle()
+        assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), fake.replies.last()[PebbleKeys.PHASE])
+        assertEquals("Half an ans", fake.text)
+    }
 }

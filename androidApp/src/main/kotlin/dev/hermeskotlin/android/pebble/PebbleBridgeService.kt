@@ -48,7 +48,10 @@ class PebbleBridgeService : BasePebbleListenerService() {
                 // Started now, while the message is being delivered: the turn may outlast the watchapp's binding.
                 notifier.startServiceNow()
             }
-            is PebbleIncoming.Stop -> relay.stop(incoming.askId)
+            is PebbleIncoming.Stop -> {
+                relay.stop(incoming.askId)
+                outbox.watch(node).stopped(incoming.askId)
+            }
             PebbleIncoming.ChatsRequest -> relay.chats(node)
             is PebbleIncoming.StatusRequest -> scope.launch {
                 // Waited for: the watch's first message often starts Herald, and the stored settings are still being read then.

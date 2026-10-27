@@ -355,20 +355,41 @@ Each phase ends in something testable on the user's phone and Time 2.
   - a long Up stops the turn;
   - Back leaves.
 
-### Phase 2: watchapp MVP (talk)
+### Phase 2: watchapp MVP (talk) ✅ done (2026-10-27)
 
-1. `pebbleApp/` scaffold: `targetPlatforms: ["emery"]` first, a `companionApp` entry, `messageKeys`, and the inbox/outbox sizes.
-2. Talk window:
+1. `pebbleApp/` scaffold: `targetPlatforms: ["emery"]` first, a `companionApp` entry, `messageKeys`, and the inbox/outbox sizes. *(Done in Phase 1.)*
+2. Talk window (`src/c/talk.c`, with the messages in `src/c/link.c`):
    - Select opens dictation, which sends `ASK`.
-   - A header shows the chat title and the phone status.
-   - A status line shows the phase and activity.
-   - The reply streams into a `ScrollLayer`, with Up/Down to scroll.
-   - Back during a turn sends `STOP`, after a confirm.
-3. Phone status and error states: "Sign in to Herald on your phone first", unreachable gateway, "I didn't catch that".
-4. The picked chat persists in storage, so the next ask continues it.
-5. A fake-phone mode for the emulator (`pebble build && pebble install --emulator emery`), modelled on `wearApp/FakePhone.kt`, so the UI can be built without hardware.
+   - The header, in the phone's accent, shows the chat title and a phone-status dot.
+   - The line under it shows the phase and activity, worded as on the Wear watch.
+   - What was said (bold, grey) and the reply stream into a `ScrollLayer`; Up/Down scroll.
+   - **Changed from the plan:** Back always leaves; the turn goes on on the phone, and reopening catches up (Phase 1's replay). Stopping is in the hold-Select menu (`ActionMenu`): *Stop* (while a turn runs), *New chat*, *Check phone*. A stop ends the turn as `Done` with what came so far on both sides, as the Wear watch does, so reopening doesn't show it running again.
+3. Phone status and error states, in the Wear watch's words:
+   - phone not connected (from `connection_service`);
+   - Herald not answering (no `STATUS` within 5 s);
+   - signed out;
+   - gateway out of reach;
+   - reconnecting.
+
+   The phone is asked again every 30 s while the app is open. A failed turn shows its whole error in the body. "I didn't catch that" never comes from the phone: the Pebble app's dictation shows its own errors.
+4. The picked chat (id and title) and the accent persist, so the next ask continues the chat and the header keeps its colour.
+5. **Changed from the plan:** no fake-phone code in the watchapp. The emulator is driven from outside instead:
+   - `pebble install --emulator emery`;
+   - `pebble send-app-message --emulator emery --int 1=64 4=2 … --string 2=p1 5="…"` plays the phone (numeric keys from `package.json`);
+   - `pebble emu-button` presses buttons;
+   - `pebble transcribe --emulator emery "…"` answers dictation.
 
 *Exit:* on the Time 2, ask by voice, watch the reply stream in, and stop it. The phone's own chat isn't moved.
+
+#### Phase 2 results
+
+- **Emulator** ✅ Checked by screenshot: each phone state, the empty screen, a streaming reply growing by offset, scrolling, the action menu, dictation (confirm screen, then the ask shown and sent), and a failed turn.
+- **On the Time 2** ✅
+  - The user confirmed the talk screen works.
+  - The logs show an ask streaming through `Sending` and `Working`, and the status checked every 30 s.
+  - The first Stop left the screen on *Thinking…*, since the relay sends nothing after a stop. Fixed as above, with a test (`aStoppedTurnEndsAsDoneWithWhatCameSoFar`).
+- **Installing:** `pebble install --adb` works with the phone on USB and no LAN developer connection. The LAN mode stopped listening after the Pebble app restarted, even with Dev Connection on.
+- **Memory:** about 13.5 KB of the watch's 128 KB.
 
 ### Phase 3: chats, rings, closed-app delivery
 
