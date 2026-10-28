@@ -55,6 +55,15 @@ class WatchRequestsTest {
     }
 
     @Test
+    fun aRingIsAnsweredOnTheWatchOnlyWhenAllowedAndNeverForTheAgentsCall() {
+        val question = InputRequest.Clarify("c5", listOf(ClarifyQuestion("q0", "Which?", listOf("a", "b"))))
+        assertEquals(WatchAnswering.ChoicesOrText, ringAnswering(question, answersOnWatch = true))
+        assertEquals(WatchAnswering.Choices, ringAnswering(approval, answersOnWatch = true))
+        assertEquals(WatchAnswering.OnPhone, ringAnswering(question, answersOnWatch = false))
+        assertEquals(WatchAnswering.OnPhone, ringAnswering(null, answersOnWatch = true))
+    }
+
+    @Test
     fun multiSelectBatchesAndPasswordsStayOnThePhone() {
         val multi = InputRequest.Clarify("c3", listOf(ClarifyQuestion("q0", "Which?", listOf("a", "b"), multiSelect = true)))
         val batch = InputRequest.Clarify("c4", listOf(ClarifyQuestion("q0", "One?"), ClarifyQuestion("q1", "Two?")))

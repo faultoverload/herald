@@ -38,6 +38,13 @@ fun watchView(request: InputRequest): WatchRequestView = when (request) {
 }
 
 /**
+ * How a watch answers a ring for [request] once it's picked up there: as [watchView] says while [answersOnWatch],
+ * else on the phone only, and so for a call from the agent (no [request]), which only the phone can take.
+ */
+fun ringAnswering(request: InputRequest?, answersOnWatch: Boolean): WatchAnswering =
+    if (request != null && answersOnWatch) watchView(request).answering else WatchAnswering.OnPhone
+
+/**
  * The gateway's answer to [request] from a watch: choice [index] of [watchView]'s choices, or [text] dictated. Null
  * when it doesn't fit the request (it changed, or can't be answered there).
  */

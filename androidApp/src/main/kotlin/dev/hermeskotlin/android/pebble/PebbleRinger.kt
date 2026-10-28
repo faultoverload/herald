@@ -10,7 +10,7 @@ import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.answersOnPebble
 import dev.hermeskotlin.core.wear.WatchAnswering
-import dev.hermeskotlin.core.wear.watchView
+import dev.hermeskotlin.core.wear.ringAnswering
 import dev.hermeskotlin.wearlink.PebbleDict
 import dev.hermeskotlin.wearlink.PebbleIncoming
 import dev.hermeskotlin.wearlink.PebbleLink
@@ -77,7 +77,7 @@ class PebbleRinger(
         val to = heard
         if (!current.pebble || !current.watchRings || to.isEmpty()) return false
         val request = call.request
-        val answering = if (request != null && current.answersOnPebble) watchView(request).answering else WatchAnswering.OnPhone
+        val answering = ringAnswering(request, current.answersOnPebble)
         val watchRing = WatchRing(
             call.id,
             call.storedSessionId.orEmpty(),
