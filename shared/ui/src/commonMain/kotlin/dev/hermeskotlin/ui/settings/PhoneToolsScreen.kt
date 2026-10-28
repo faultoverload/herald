@@ -168,8 +168,9 @@ internal const val RINGS_TALK_DETAIL =
 
 /** Under the switch: where the watch rings, and when it can't. */
 internal const val WATCH_RINGS_DETAIL =
-    "Herald on your watch rings as well. Answer there, and Hermes asks on a call from the watch. Only when your " +
-        "gateway talks live."
+    "Herald on your watch rings as well. On a Wear OS watch, Answer starts a call from the watch, when your gateway " +
+        "talks live. On a Pebble, Answer shows the question there when Answer on the Pebble is on; else answer on " +
+        "your phone."
 
 /** Under the switch: what rings, and that the agent never calls anyone. */
 internal const val RINGS_DETAIL =

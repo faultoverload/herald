@@ -3,12 +3,16 @@ package dev.hermeskotlin.android
 import android.app.Application
 import android.content.Intent
 import dev.hermeskotlin.android.notify.BotNotifier
+import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.RoomNotifier
 import dev.hermeskotlin.android.notify.WatchNotifier
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.phone.Geofences
 import dev.hermeskotlin.android.push.PushListener
+import dev.hermeskotlin.android.pebble.PebbleApps
+import dev.hermeskotlin.android.pebble.PebbleRequests
+import dev.hermeskotlin.android.pebble.PebbleRinger
 import dev.hermeskotlin.android.wear.WatchAccentSync
 import dev.hermeskotlin.android.wear.WatchRinger
 import dev.hermeskotlin.android.wear.WearRequests
@@ -37,8 +41,13 @@ class HermesApplication : Application() {
             androidContext(this@HermesApplication)
             modules(sharedModules + notifyModule + wearModule)
         }.koin
+        // Before anything the Pebble app hands over is read: only the picked Pebble app is heard.
+        PebbleApps.choose(this, koin.get())
         koin.get<WearRequests>().start()
+        koin.get<PebbleRequests>().start()
         koin.get<WatchRinger>().start()
+        // Wear OS watches and Pebbles ring along with the phone.
+        koin.get<ChatNotifications>().alsoRings = ChatNotifications.AllRings(listOf(koin.get<WatchRinger>(), koin.get<PebbleRinger>()))
         koin.get<WatchAccentSync>().start()
         koin.get<ChatNotifier>().start()
         koin.get<BotNotifier>().start()

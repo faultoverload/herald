@@ -99,6 +99,7 @@ import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sun
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.WrapText
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
@@ -194,11 +195,12 @@ fun SettingsScreen(
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var connectedDevicesOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !connectedDevicesOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -223,6 +225,7 @@ fun SettingsScreen(
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenConnectedDevices = { connectedDevicesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -234,6 +237,9 @@ fun SettingsScreen(
             onChange = { text -> viewModel.update { it.copy(startInstruction = text) } },
             onBack = { startInstructionOpen = false },
         )
+    }
+    if (connectedDevicesOpen) {
+        ConnectedDevicesScreen(settings, onUpdate = viewModel::update, onBack = { connectedDevicesOpen = false })
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
     ConnectionCheckSheet(
@@ -315,6 +321,7 @@ internal fun SettingsView(
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenConnectedDevices: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -657,6 +664,13 @@ internal fun SettingsView(
                         detail = phoneToolsSummary(settings),
                         icon = Lucide.Smartphone,
                         onClick = onOpenPhoneTools,
+                    )
+                    Divider()
+                    NavRow(
+                        title = "Connected devices",
+                        detail = connectedDevicesSummary(settings),
+                        icon = Lucide.Watch,
+                        onClick = onOpenConnectedDevices,
                     )
                 }
 

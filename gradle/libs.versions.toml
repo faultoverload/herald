@@ -33,6 +33,8 @@ wear-tiles = "1.6.2"
 wear-protolayout = "1.4.2"
 wear-complications = "1.3.0"
 android-wear-minSdk = "30"
+# Pebble companion: the Pebble phone app's messaging to Herald's watchapp (pebbleApp)
+pebblekit2 = "1.3.2"
 
 android-compileSdk = "37"
 android-targetSdk = "36"
@@ -95,6 +97,7 @@ webrtc-android = { module = "io.github.webrtc-sdk:android", version.ref = "webrt
 
 # Wear OS companion: the Data Layer on both sides, and the watch app's UI, tile and complication
 play-services-wearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "play-services-wearable" }
+pebblekit2-client = { module = "io.rebble.pebblekit2:client", version.ref = "pebblekit2" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinx-coroutines" }
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wear-compose" }
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wear-compose" }

@@ -318,4 +318,9 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Herald on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings
 - [x] watch follows phone accent colors
 - [ ] Wear OS direct mode: the watch talks to the gateway itself, without the phone
+- [x] Pebble companion (`pebbleApp`, `PebbleLink` in `shared/wearlink`), for every Pebble with a microphone: talk to Hermes through Herald on the phone (PebbleKit 2 and the Pebble app, which wakes Herald when it's closed); the reply as it comes, Stop, chats and each one's last exchange; a turn that ends while the watchapp is closed comes as the usual notification. See [pebble.md](pebble.md)
+- [x] Pebble: approvals and questions answered on the watch (Settings → Connected devices → Answer on the Pebble, off by default: it skips the phone's unlock), and rings along with the phone, opening Herald there, with a ringtone on watches that have a speaker
+- [x] Pebble: quick launch into dictation, a launcher glance with the last reply, prompts edited on the phone (Settings → Connected devices), tap and drag on the talk screen, and an on/off switch
+- [ ] Pebble: a choice of Pebble phone app other than the Core app
+- [ ] Pebble: the gateway's voice on the watch's speaker
 - [ ] Localization (`i18n.catalog`)
