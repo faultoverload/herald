@@ -4,6 +4,7 @@ import dev.hermeskotlin.android.notify.RequestAnswers
 import dev.hermeskotlin.android.wear.WearRequests
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.answersOnPebble
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.core.wear.watchAnswer
 import dev.hermeskotlin.core.wear.watchView
@@ -22,7 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Approvals and questions on a Pebble, while answering there is on (Settings → Notifications → Answer on the Pebble).
+ * Approvals and questions on a Pebble, while answering there is on (Settings → Pebble → Answer on the Pebble).
  * Those in the watch's chat go to the Pebble that asked, as they come, and again when Herald opens there; what's
  * picked or dictated there comes back through [answer]. Off, none are sent, and the watch says to answer on the
  * phone, where they're the usual notifications ([WearRequests]); on, those are posted quietly and on the phone only.
@@ -46,14 +47,14 @@ class PebbleRequests(
     /** Requests picked up from a ring, in any chat, and the Pebble each shows on. Only touched on the main thread. */
     private val fromRings = mutableMapOf<String, String>()
 
-    private val on: Boolean get() = settings.settings.value?.pebbleAnswers == true
+    private val on: Boolean get() = settings.settings.value?.answersOnPebble == true
 
     fun start() {
         // Shown here, they'd show twice: once from Herald, once mirrored from the phone's notification.
         wearRequests.shownOnWatch = { on && node.value != null }
         scope.launch {
             val state = relay.session.flatMapLatest { it?.state ?: flowOf(null) }
-            val answering = settings.settings.map { it?.pebbleAnswers == true }.distinctUntilChanged()
+            val answering = settings.settings.map { it?.answersOnPebble == true }.distinctUntilChanged()
             combine(state, answering, node) { chat, on, to -> Triple(chat, on, to) }.collect { (chat, on, to) ->
                 val watch = to?.first ?: return@collect
                 val open = if (on) chat?.inputRequests.orEmpty() else emptyList()

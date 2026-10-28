@@ -8,6 +8,7 @@ import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.answersOnPebble
 import dev.hermeskotlin.core.wear.WatchAnswering
 import dev.hermeskotlin.core.wear.watchView
 import dev.hermeskotlin.wearlink.PebbleDict
@@ -24,7 +25,7 @@ import kotlinx.coroutines.launch
 /**
  * Rings Herald on the Pebbles along with the phone when Hermes calls for an answer, whether or not the gateway talks
  * live: Herald is opened there for it. Answer on the watch shows the approval or question there while answering on
- * the Pebble is on (Settings → Notifications); else the watch only stops ringing and says to answer on the phone,
+ * the Pebble is on (Settings → Pebble); else the watch only stops ringing and says to answer on the phone,
  * which rings on, and so it does for a call from the agent. Only Pebbles Herald heard from ring: Herald is installed
  * there.
  */
@@ -74,9 +75,9 @@ class PebbleRinger(
     // Called on the main thread, as the phone's call is posted.
     override fun ring(call: ChatNotifications.Ringing): Boolean {
         val to = heard
-        if (!current.watchRings || to.isEmpty()) return false
+        if (!current.pebble || !current.watchRings || to.isEmpty()) return false
         val request = call.request
-        val answering = if (request != null && current.pebbleAnswers) watchView(request).answering else WatchAnswering.OnPhone
+        val answering = if (request != null && current.answersOnPebble) watchView(request).answering else WatchAnswering.OnPhone
         val watchRing = WatchRing(
             call.id,
             call.storedSessionId.orEmpty(),
@@ -122,7 +123,7 @@ class PebbleRinger(
         now.watches -= node
         now.waiting -= node
         val request = now.call.request
-        if (end.answered && (request == null || now.answering == WatchAnswering.OnPhone || !current.pebbleAnswers)) {
+        if (end.answered && (request == null || now.answering == WatchAnswering.OnPhone || !current.answersOnPebble)) {
             outbox.watch(node).message(PebbleLink.ringEnd(RingEnd(end.requestId)))
             return
         }

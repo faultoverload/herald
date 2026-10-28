@@ -582,15 +582,6 @@ internal fun SettingsView(
                     )
                     Divider()
                     SwitchRow(
-                        title = "Answer on the Pebble",
-                        detail = "Approvals and questions can be answered on Herald's Pebble app, which doesn't ask for " +
-                            "this phone's unlock: anyone wearing the watch can answer them.",
-                        checked = settings.pebbleAnswers,
-                        onCheckedChange = { on -> onUpdate { it.copy(pebbleAnswers = on) } },
-                        icon = Lucide.Watch,
-                    )
-                    Divider()
-                    SwitchRow(
                         title = "Finished replies",
                         detail = "When a turn ends while Herald is in the background. Reply from the notification.",
                         checked = settings.notifyReplies,
@@ -657,6 +648,28 @@ internal fun SettingsView(
                             },
                             Lucide.Send,
                             onPushTest,
+                        )
+                    }
+                }
+
+                Section("Pebble") {
+                    SwitchRow(
+                        title = "Herald on the Pebble",
+                        detail = "Talk to Hermes from Herald's Pebble watchapp, and let it ring there. Off, the watchapp " +
+                            "says so and nothing goes to it.",
+                        checked = settings.pebble,
+                        onCheckedChange = { on -> onUpdate { it.copy(pebble = on) } },
+                        icon = Lucide.Watch,
+                    )
+                    if (settings.pebble) {
+                        Divider()
+                        SwitchRow(
+                            title = "Answer on the Pebble",
+                            detail = "Approvals and questions can be answered on the watch, which doesn't ask for this " +
+                                "phone's unlock: anyone wearing it can answer them.",
+                            checked = settings.pebbleAnswers,
+                            onCheckedChange = { on -> onUpdate { it.copy(pebbleAnswers = on) } },
+                            icon = Lucide.ShieldAlert,
                         )
                     }
                 }

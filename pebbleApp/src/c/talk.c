@@ -14,6 +14,15 @@
 #define HEADER_H 30
 #define ACTIVITY_H 24
 #define PAD 6
+// A quick launch opens straight into dictation, once the window is up.
+#define QUICK_DICTATE_MS 400
+// How long the launcher says Herald's working, after it closed mid-turn.
+#define GLANCE_WORKING_S (10 * 60)
+// The launcher's line under Herald holds 150 bytes.
+#define GLANCE_BYTES 140
+
+// Asked with a press, from the hold-Select menu. Fixed for now.
+static const char *const s_prompts[] = { "Summarize my day", "What's running?", "What needs my attention?" };
 
 // Persisted.
 enum { KEY_CHAT_ID = 1, KEY_CHAT_TITLE = 2, KEY_ACCENT_REV = 3, KEY_ACCENT_FILL = 4, KEY_ACCENT_ON_FILL = 5 };
@@ -25,6 +34,8 @@ typedef enum {
   // A phone is, but Herald there didn't answer.
   PHONE_NO_HERALD,
   PHONE_SIGNED_OUT,
+  // Herald's Pebble switch is off.
+  PHONE_OFF,
   // Signed in, and Herald gave up reaching the gateway.
   PHONE_UNREACHABLE,
   PHONE_RECONNECTING,
@@ -60,6 +71,11 @@ static char s_activity[128];
 static char s_error[128];
 static int s_ask_count;
 
+static void prv_copy(char *to, size_t size, const char *from) {
+  strncpy(to, from ? from : "", size - 1);
+  to[size - 1] = '\0';
+}
+
 static bool prv_running(void) {
   return s_has_turn && s_phase <= PHASE_WAITING_ON_PHONE;
 }
@@ -71,6 +87,7 @@ static const char *prv_phone_problem_short(void) {
     case PHONE_NOT_CONNECTED: return "Phone not connected";
     case PHONE_NO_HERALD: return "No answer from Herald";
     case PHONE_SIGNED_OUT: return "Sign in on your phone";
+    case PHONE_OFF: return "Off in Herald";
     case PHONE_UNREACHABLE: return "Gateway out of reach";
     default: return NULL;
   }
@@ -82,6 +99,7 @@ static const char *prv_phone_problem(void) {
     case PHONE_NOT_CONNECTED: return "Your phone isn't connected.";
     case PHONE_NO_HERALD: return "Herald on your phone didn't answer. Open it there, or update it.";
     case PHONE_SIGNED_OUT: return "Sign in to Herald on your phone first.";
+    case PHONE_OFF: return "Herald on the Pebble is off. Turn it on in Herald's settings on your phone.";
     case PHONE_UNREACHABLE: return "Herald can't reach your gateway. Check it on your phone.";
     default: return NULL;
   }
@@ -174,7 +192,7 @@ static void prv_redraw(void) {
   } else {
     // Nothing asked yet: what's wrong, or how to start.
     const char *problem = prv_phone_problem();
-    text_layer_set_text(s_reply_layer, problem ? problem : "Press Select and speak to Hermes.\n\nHold Select for your chats.");
+    text_layer_set_text(s_reply_layer, problem ? problem : "Press Select and speak to Hermes.\n\nHold Select for prompts and your chats.");
   }
   prv_layout();
 }
@@ -207,7 +225,8 @@ void talk_on_status(const LinkStatus *status) {
     app_timer_cancel(s_answer_timer);
     s_answer_timer = NULL;
   }
-  if (!(status->flags & LINK_FLAG_SIGNED_IN)) s_phone = PHONE_SIGNED_OUT;
+  if (status->flags & LINK_FLAG_OFF) s_phone = PHONE_OFF;
+  else if (!(status->flags & LINK_FLAG_SIGNED_IN)) s_phone = PHONE_SIGNED_OUT;
   else if (status->flags & LINK_FLAG_FAILED) s_phone = PHONE_UNREACHABLE;
   else if (status->flags & LINK_FLAG_CONNECTED) s_phone = PHONE_READY;
   else s_phone = PHONE_RECONNECTING;
@@ -216,6 +235,11 @@ void talk_on_status(const LinkStatus *status) {
   if (!s_asked_history && !s_has_turn && s_chat_id[0] && s_phone == PHONE_READY) {
     s_asked_history = true;
     s_loading_chat = link_history_request(s_chat_id);
+  }
+  if (s_phone == PHONE_OFF && s_has_turn && s_phase == PHASE_SENDING) {
+    // What was just said went nowhere.
+    s_phase = PHASE_FAILED;
+    prv_copy(s_error, sizeof(s_error), prv_phone_problem());
   }
   if (status->has_accent) {
     // The phone's dark accent: its fill for the header, its on-fill for the header's text.
@@ -239,11 +263,6 @@ static void prv_phone_connection(bool connected) {
 }
 
 // --- The turn
-
-static void prv_copy(char *to, size_t size, const char *from) {
-  strncpy(to, from ? from : "", size - 1);
-  to[size - 1] = '\0';
-}
 
 static void prv_ask(const char *text) {
   snprintf(s_ask_id, sizeof(s_ask_id), "p%lx%d", (unsigned long)time(NULL), ++s_ask_count);
@@ -379,6 +398,15 @@ static void prv_menu_stop(ActionMenu *menu, const ActionMenuItem *item, void *co
   prv_redraw();
 }
 
+static void prv_menu_prompt(ActionMenu *menu, const ActionMenuItem *item, void *context) {
+  if (!link_phone_connected()) {
+    s_phone = PHONE_NOT_CONNECTED;
+    prv_redraw();
+    return;
+  }
+  prv_ask(action_menu_item_get_action_data(item));
+}
+
 static void prv_menu_check_phone(ActionMenu *menu, const ActionMenuItem *item, void *context) {
   s_phone = PHONE_UNKNOWN;
   prv_ask_status();
@@ -390,8 +418,15 @@ static void prv_menu_closed(ActionMenu *menu, const ActionMenuItem *performed, v
 }
 
 static void prv_menu(ClickRecognizerRef recognizer, void *context) {
-  ActionMenuLevel *root = action_menu_level_create(4);
+  ActionMenuLevel *root = action_menu_level_create(5);
   if (prv_running()) action_menu_level_add_action(root, "Stop", prv_menu_stop, NULL);
+  if (!prv_running()) {
+    ActionMenuLevel *prompts = action_menu_level_create(ARRAY_LENGTH(s_prompts));
+    for (unsigned i = 0; i < ARRAY_LENGTH(s_prompts); i++) {
+      action_menu_level_add_action(prompts, s_prompts[i], prv_menu_prompt, (void *)s_prompts[i]);
+    }
+    action_menu_level_add_child(root, prompts, "Prompts");
+  }
   action_menu_level_add_action(root, "New chat", prv_menu_new_chat, NULL);
   action_menu_level_add_action(root, "Chats", prv_menu_chats, NULL);
   action_menu_level_add_action(root, "Check phone", prv_menu_check_phone, NULL);
@@ -409,6 +444,25 @@ static void prv_click_config(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_select);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_menu, NULL);
 }
+
+// --- Touch: a tap talks, as Select does; a drag scrolls the reply.
+
+#ifdef _PBL_API_EXISTS_tap_recognizer_create
+static int16_t s_scroll_from;
+
+static void prv_tap(const Recognizer *recognizer, RecognizerEvent event) {
+  if (event == RecognizerEvent_Completed) prv_select(NULL, NULL);
+}
+
+static void prv_pan(const Recognizer *recognizer, RecognizerEvent event) {
+  if (event == RecognizerEvent_Started) {
+    s_scroll_from = scroll_layer_get_content_offset(s_scroll_layer).y;
+  } else if (event == RecognizerEvent_Updated) {
+    GPoint moved = pan_recognizer_get_delta_since_start(recognizer);
+    scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, s_scroll_from + moved.y), false);
+  }
+}
+#endif
 
 // --- The window
 
@@ -442,6 +496,13 @@ static void prv_window_load(Window *window) {
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_reply_layer));
   layer_add_child(root, scroll_layer_get_layer(s_scroll_layer));
 
+#ifdef _PBL_API_EXISTS_tap_recognizer_create
+  // Its own taps and drags instead of the system's button emulation; the window destroys them as it unloads.
+  window_set_touch_bridge_disabled(window, true);
+  window_attach_recognizer(window, tap_recognizer_create(prv_tap, NULL));
+  window_attach_recognizer(window, pan_recognizer_create(prv_pan, NULL, PanAxis_Vertical));
+#endif
+
   prv_redraw();
 }
 
@@ -456,6 +517,45 @@ static void prv_window_unload(Window *window) {
 static void prv_first_status(void *data) {
   prv_status_tick(NULL);
 }
+
+static void prv_quick_dictate(void *data) {
+  prv_select(NULL, NULL);
+}
+
+// --- The launcher's glance (the Wear tile's last reply): the reply's first line, or that it's still working.
+
+#ifdef _PBL_API_EXISTS_app_glance_reload
+static void prv_add_glance(AppGlanceReloadSession *session, const char *line, time_t until) {
+  app_glance_add_slice(session, (AppGlanceSlice) {
+    .layout = { .icon = APP_GLANCE_SLICE_DEFAULT_ICON, .subtitle_template_string = line },
+    .expiration_time = until,
+  });
+}
+
+static void prv_glance(AppGlanceReloadSession *session, size_t limit, void *context) {
+  if (limit == 0) return;
+  if (prv_running()) {
+    // Ended meanwhile, its reply comes as a notification: past this, the glance asks again.
+    prv_add_glance(session, "Working on it...", time(NULL) + GLANCE_WORKING_S);
+    if (limit > 1) prv_add_glance(session, "Ask Hermes anything", APP_GLANCE_SLICE_NO_EXPIRATION);
+    return;
+  }
+  static char line[GLANCE_BYTES + 1];
+  const char *from = s_reply;
+  while (*from == '\n' || *from == ' ') from++;
+  int n = 0;
+  while (from[n] && from[n] != '\n' && n < GLANCE_BYTES) n++;
+  // Never half a character.
+  if (from[n] && from[n] != '\n') while (n > 0 && (from[n] & 0xC0) == 0x80) n--;
+  for (int i = 0; i < n; i++) {
+    // Braces start a template's fields.
+    line[i] = from[i] == '{' ? '(' : from[i] == '}' ? ')' : from[i];
+  }
+  line[n] = '\0';
+  bool has_reply = s_has_turn && s_phase == PHASE_DONE && n > 0;
+  prv_add_glance(session, has_reply ? line : "Ask Hermes anything", APP_GLANCE_SLICE_NO_EXPIRATION);
+}
+#endif
 
 void talk_init(void) {
   // Herald blue on white until the phone tells its accent.
@@ -478,9 +578,13 @@ void talk_init(void) {
   window_stack_push(s_window, true);
   // A moment after opening, once the link is up.
   app_timer_register(300, prv_first_status, NULL);
+  if (launch_reason() == APP_LAUNCH_QUICK_LAUNCH) app_timer_register(QUICK_DICTATE_MS, prv_quick_dictate, NULL);
 }
 
 void talk_deinit(void) {
+#ifdef _PBL_API_EXISTS_app_glance_reload
+  app_glance_reload(prv_glance, NULL);
+#endif
   connection_service_unsubscribe();
   dictate_deinit();
   window_destroy(s_window);

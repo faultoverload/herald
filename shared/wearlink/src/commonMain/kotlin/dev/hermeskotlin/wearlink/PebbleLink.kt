@@ -291,6 +291,9 @@ object PebbleLink {
         error?.let { put(PebbleKeys.ERROR, text(clipUtf8(it, MAX_ERROR_BYTES))) }
     }
 
+    /** The status while Herald's Pebble switch is off, whatever the watch sent. */
+    fun off(): PebbleDict = mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS), PebbleKeys.FLAGS to num(FLAG_OFF))
+
     fun ringEnd(end: RingEnd): PebbleDict = mapOf(
         PebbleKeys.TYPE to num(PebbleTypes.RING_END),
         PebbleKeys.REQUEST_ID to text(end.requestId),
@@ -310,6 +313,8 @@ object PebbleLink {
     const val FLAG_SIGNED_IN = 1
     const val FLAG_CONNECTED = 2
     const val FLAG_FAILED = 4
+    /** Herald's Pebble switch is off: the phone takes nothing from the watch. */
+    const val FLAG_OFF = 8
 
     private fun num(value: Int) = PebbleValue.Num(value)
     private fun text(value: String) = PebbleValue.Text(value)

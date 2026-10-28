@@ -18,6 +18,8 @@ typedef enum {
 #define LINK_FLAG_SIGNED_IN 1
 #define LINK_FLAG_CONNECTED 2
 #define LINK_FLAG_FAILED 4
+// Herald's Pebble switch is off on the phone.
+#define LINK_FLAG_OFF 8
 
 // One piece of a turn: its state, and text to place at byte offset of the reply.
 typedef struct {

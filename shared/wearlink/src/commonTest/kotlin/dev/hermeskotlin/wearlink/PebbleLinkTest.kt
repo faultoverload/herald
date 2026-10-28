@@ -52,6 +52,7 @@ class PebbleLinkTest {
         assertEquals(num(0x123456), dict[PebbleKeys.ACCENT_DIM])
         assertEquals(text(accent.revision), dict[PebbleKeys.ACCENT_REV])
         assertNull(PebbleLink.status(PhoneStatus(signedIn = false, connected = false))[PebbleKeys.ACCENT_FILL])
+        assertEquals(num(PebbleLink.FLAG_OFF), PebbleLink.off()[PebbleKeys.FLAGS])
     }
 
     @Test

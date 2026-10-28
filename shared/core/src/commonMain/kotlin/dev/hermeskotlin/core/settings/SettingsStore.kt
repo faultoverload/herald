@@ -141,6 +141,11 @@ data class AppSettings(
      */
     val watchRings: Boolean = true,
     /**
+     * Herald talks to its Pebble watchapp. Off, the watchapp is told so and nothing goes to it: no turns, no rings,
+     * no requests.
+     */
+    val pebble: Boolean = true,
+    /**
      * Approvals and questions can be answered on a Pebble, as they come or when it rings. Off by default: a watch's
      * answer doesn't ask for the phone's unlock. Off, the Pebble says to answer on the phone.
      */
@@ -167,6 +172,9 @@ data class AppSettings(
     /** The sidebar shows its projects as one button that opens a list, not a row of chips that scrolls sideways. */
     val projectsAsDropdown: Boolean = false,
 )
+
+/** Approvals and questions are answered on a Pebble: its switch is on, and so is answering there. */
+val AppSettings.answersOnPebble: Boolean get() = pebble && pebbleAnswers
 
 /** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
 fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction?.trim()?.takeIf { it.isNotEmpty() }
