@@ -39,6 +39,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
     private val relay: WatchRelay by inject()
     private val outbox: PebbleOutbox by inject()
     private val requests: PebbleRequests by inject()
+    private val ringer: PebbleRinger by inject()
     private val notifier: ChatNotifier by inject()
     private val settings: SettingsStore by inject()
     private val scope: CoroutineScope by inject()
@@ -56,6 +57,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
         val incoming = PebbleLink.decode(dict) ?: return ReceiveResult.Ack
         // By type number: R8 renames the classes in a release build.
         Log.d(TAG, "From the Pebble: type ${dict[PebbleKeys.TYPE]}")
+        ringer.heardFrom(node)
         when (incoming) {
             is PebbleIncoming.Ask -> {
                 requests.askedFrom(node)
@@ -76,8 +78,8 @@ class PebbleBridgeService : BasePebbleListenerService() {
             is PebbleIncoming.Resync -> outbox.watch(node).resync(incoming.askId)
             is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId) }
             is PebbleIncoming.Answer -> requests.answer(node, incoming)
-            // Rings come with the watchapp's ring screen.
-            is PebbleIncoming.RingOn, is PebbleIncoming.RingEnd -> Unit
+            is PebbleIncoming.RingOn -> ringer.ringsOn(node, incoming)
+            is PebbleIncoming.RingEnd -> ringer.endedOnWatch(node, incoming)
         }
         return ReceiveResult.Ack
     }
@@ -106,6 +108,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
         val node = PebbleOutbox.nodeOf(watch)
         outbox.watch(node).opened()
         requests.reopened(node)
+        ringer.opened(node)
     }
 
     override fun onAppClosed(watchappUUID: UUID, watch: WatchIdentifier) {

@@ -16,8 +16,6 @@ import dev.hermeskotlin.wearlink.PebbleWatch
 import dev.hermeskotlin.wearlink.PhoneStatus
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplyUpdate
-import dev.hermeskotlin.wearlink.RingEnd
-import dev.hermeskotlin.wearlink.WatchRing
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
 import io.rebble.pebblekit2.client.DefaultPebbleSender
@@ -70,11 +68,17 @@ class PebbleOutbox(
                 val list = WearJson.decode<ChatList>(data) ?: return false
                 PebbleLink.chats(list, System.currentTimeMillis() / 1000.0).forEach(watch::message)
             }
-            WearPaths.RING -> watch.message(PebbleLink.ring(WearJson.decode<WatchRing>(data) ?: return false))
-            WearPaths.RING_END -> watch.message(PebbleLink.ringEnd(WearJson.decode<RingEnd>(data) ?: return false))
             else -> return false
         }
         return true
+    }
+
+    /** Opens Herald on the Pebble [node] names; false when that can't be done (not connected, or no Pebble app). */
+    suspend fun launch(node: String): Boolean {
+        val watch = watchOf(node)
+        val result = sender.startAppOnTheWatch(APP_UUID, listOf(watch))?.get(watch)
+        Log.d(TAG, "Opening Herald on the Pebble: $result")
+        return result == TransmissionResult.Success
     }
 
     override suspend fun stream(node: String, path: String, data: ByteArray): Boolean = false

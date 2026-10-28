@@ -1,6 +1,7 @@
 #include "talk.h"
 #include "chats.h"
 #include "request.h"
+#include "ring.h"
 #include "dictate.h"
 
 // PebbleLink.MAX_REPLY_BYTES: the phone never sends more.
@@ -320,6 +321,10 @@ void talk_on_reply(const LinkReply *reply) {
 
 void talk_on_request(const LinkRequest *request) {
   request_show(request, s_fill, s_on_fill);
+}
+
+void talk_on_ring(const LinkRing *ring) {
+  ring_show(ring, s_fill, s_on_fill);
 }
 
 // Talks in [chat_id] from the next ask on; an empty id is a new chat.

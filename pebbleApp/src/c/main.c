@@ -6,6 +6,12 @@
 #include "talk.h"
 #include "chats.h"
 #include "request.h"
+#include "ring.h"
+
+static void prv_send_failed(int type) {
+  talk_on_send_failed(type);
+  ring_on_send_failed(type);
+}
 
 int main(void) {
   link_open((LinkHandlers) {
@@ -14,7 +20,10 @@ int main(void) {
     .on_request = talk_on_request,
     .on_request_end = request_end,
     .on_status = talk_on_status,
-    .on_send_failed = talk_on_send_failed,
+    .on_ring = talk_on_ring,
+    .on_ring_end = ring_end,
+    .on_send_failed = prv_send_failed,
+    .on_sent = ring_on_sent,
   });
   talk_init();
   app_event_loop();

@@ -73,7 +73,9 @@ object PebbleTypes {
     const val CHATS_REQ = 3
     /** With [PebbleKeys.ACCENT_REV], the accent the watch has; the phone answers with [STATUS]. */
     const val STATUS_REQ = 4
+    /** The watch rings for request [PebbleKeys.REQUEST_ID]. */
     const val RING_ON = 5
+    /** Picked up on the watch ([PebbleKeys.ANSWERED] 1, only when the ring said it's answered there) or declined (0). */
     const val RING_END_FROM_WATCH = 6
     /** The watch was told to add text past what it has (it restarted unseen): the phone sends the reply again from 0. */
     const val RESYNC = 7
@@ -86,6 +88,7 @@ object PebbleTypes {
     /** One of the recent chats, [PebbleKeys.INDEX] of [PebbleKeys.COUNT]; a count of 0 is an empty list or its [PebbleKeys.ERROR]. */
     const val CHAT_ITEM = 65
     const val STATUS = 66
+    /** Hermes calling for request [PebbleKeys.REQUEST_ID], and how it's answered on the watch ([PebbleKeys.ANSWERING]). */
     const val RING = 67
     const val RING_END = 68
     /** An approval or a question to answer on the watch (answering on the Pebble is on). */
@@ -241,14 +244,18 @@ object PebbleLink {
         }
     }
 
-    /** Hermes calling for an answer in chat [WatchRing.chatId]. */
-    fun ring(ring: WatchRing): PebbleDict = mapOf(
+    /**
+     * Hermes calling for an answer in chat [WatchRing.chatId]: [answering] says how the watch answers it once picked up
+     * ([PebbleKeys.ANSWERING]); on the phone only, Answer there just stops the watch ringing.
+     */
+    fun ring(ring: WatchRing, answering: Int): PebbleDict = mapOf(
         PebbleKeys.TYPE to num(PebbleTypes.RING),
         PebbleKeys.REQUEST_ID to text(ring.requestId),
         PebbleKeys.CHAT_ID to text(ring.chatId),
         PebbleKeys.TITLE to text(clipUtf8(ring.title, MAX_TITLE_BYTES)),
         PebbleKeys.APPROVAL to num(if (ring.approval) 1 else 0),
         PebbleKeys.AGENT to num(if (ring.agent) 1 else 0),
+        PebbleKeys.ANSWERING to num(answering),
     )
 
     /**

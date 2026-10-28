@@ -142,8 +142,24 @@ class ChatNotifications(
          */
         fun ring(call: Ringing): Boolean
 
-        /** The call for [requestId] stopped ringing here. */
+        /**
+         * The call for [requestId] stopped ringing here. A watch that ended it was dropped from those it rang first,
+         * so it isn't told.
+         */
         fun stop(requestId: String)
+
+        /** Request [requestId] is answered or over, wherever it shows. */
+        fun gone(requestId: String) = Unit
+    }
+
+    /** Each of [rings] rings along: the Wear OS watches and the Pebbles. */
+    class AllRings(private val rings: List<AlsoRings>) : AlsoRings {
+        // Every one is asked, whatever the others say.
+        override fun ring(call: Ringing): Boolean = rings.map { it.ring(call) }.any { it }
+
+        override fun stop(requestId: String) = rings.forEach { it.stop(requestId) }
+
+        override fun gone(requestId: String) = rings.forEach { it.gone(requestId) }
     }
 
     var alsoRings: AlsoRings? = null
@@ -290,6 +306,7 @@ class ChatNotifications(
     fun cancelRequest(id: String) {
         stopRinging(id)
         manager.cancel(id, REQUEST_ID)
+        alsoRings?.gone(id)
     }
 
     /**
@@ -432,7 +449,7 @@ class ChatNotifications(
             main.post { answeredOnWatch(requestId) }
             return
         }
-        val call = stopRinging(requestId, toldWatch = true) ?: return
+        val call = stopRinging(requestId) ?: return
         call.request?.let { postRequest(call.storedSessionId, call.title, it, quiet = true) }
         call.agent?.let { agent ->
             call.storedSessionId?.let { openers.put(it, agent.reason) }
@@ -446,7 +463,7 @@ class ChatNotifications(
             main.post { declinedOnWatch(requestId) }
             return
         }
-        val call = stopRinging(requestId, toldWatch = true) ?: return
+        val call = stopRinging(requestId) ?: return
         call.request?.let { postRequest(call.storedSessionId, call.title, it) }
         call.agent?.end(CallOutcome.Declined)
     }
@@ -459,8 +476,8 @@ class ChatNotifications(
         stopRinging(requestId)
     }
 
-    /** [toldWatch]: the watch ended it, so it isn't told to stop. */
-    private fun stopRinging(requestId: String, toldWatch: Boolean = false): Ringing? {
+    /** Every watch still ringing stops too ([AlsoRings.stop]). */
+    private fun stopRinging(requestId: String): Ringing? {
         manager.cancel(requestId, CALL_ID)
         var call: Ringing? = null
         _ringing.update {
@@ -469,7 +486,7 @@ class ChatNotifications(
         }
         call?.let {
             main.removeCallbacksAndMessages(it.timer)
-            if (!toldWatch) alsoRings?.stop(requestId)
+            alsoRings?.stop(requestId)
         }
         return call
     }

@@ -127,6 +127,17 @@ class PebbleLinkTest {
     }
 
     @Test
+    fun aRingSaysHowItsAnsweredAndFitsTheWatchsInbox() {
+        val ring = WatchRing("r".repeat(40), "20261027_044722_e4d150", "Ü".repeat(200), approval = false, agent = true)
+        val dict = PebbleLink.ring(ring, answering = 2)
+        assertEquals(num(PebbleTypes.RING), dict[PebbleKeys.TYPE])
+        assertEquals(num(2), dict[PebbleKeys.ANSWERING])
+        assertEquals(num(1), dict[PebbleKeys.AGENT])
+        assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES)
+        assertEquals(PebbleIncoming.RingOn("r1"), PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.RING_ON), PebbleKeys.REQUEST_ID to text("r1"))))
+    }
+
+    @Test
     fun everyChatItemFitsTheWatchsInbox() {
         val chat = WatchChat("2".repeat(40), "Ü".repeat(80), 0.0)
         val item = PebbleLink.chats(ChatList(listOf(chat)), 1.0).single()

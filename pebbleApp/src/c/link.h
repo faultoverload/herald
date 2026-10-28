@@ -66,6 +66,16 @@ typedef struct {
   Answering answering;
 } LinkRequest;
 
+// Hermes calling for request [request_id], waiting in a chat; [answering] says what Answer does here.
+typedef struct {
+  const char *request_id;
+  const char *chat_id;  // empty for a call from the agent with no chat
+  const char *title;
+  bool approval;
+  bool agent;
+  Answering answering;
+} LinkRing;
+
 typedef struct {
   void (*on_reply)(const LinkReply *reply);
   void (*on_request)(const LinkRequest *request);
@@ -73,8 +83,13 @@ typedef struct {
   void (*on_request_end)(const char *request_id, const char *error);
   void (*on_chat_item)(const LinkChatItem *item);
   void (*on_status)(const LinkStatus *status);
+  void (*on_ring)(const LinkRing *ring);
+  // The ring for [request_id] is over on the phone: answered, declined or rung out there.
+  void (*on_ring_end)(const char *request_id);
   // A message to the phone that didn't go, by its type.
   void (*on_send_failed)(int type);
+  // A message the phone took, by its type.
+  void (*on_sent)(int type);
 } LinkHandlers;
 
 enum {
@@ -82,6 +97,8 @@ enum {
   LINK_STOP = 2,
   LINK_CHATS_REQ = 3,
   LINK_STATUS_REQ = 4,
+  LINK_RING_ON = 5,
+  LINK_RING_END = 6,
   LINK_RESYNC = 7,
   LINK_HISTORY_REQ = 8,
   LINK_ANSWER = 9,
@@ -100,6 +117,11 @@ bool link_history_request(const char *chat_id);
 bool link_resync(const char *ask_id);
 // Choice [index] of those shown, or (index -1) [text] dictated.
 bool link_answer(const char *request_id, int index, const char *text);
+
+// This watch rings for [request_id].
+bool link_ring_on(const char *request_id);
+// Picked up here ([answered]) or declined.
+bool link_ring_end(const char *request_id, bool answered);
 
 // Whether the Pebble phone app is connected at all.
 bool link_phone_connected(void);

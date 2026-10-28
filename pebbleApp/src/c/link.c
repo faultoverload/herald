@@ -4,7 +4,7 @@
 #define INBOX_SIZE 2048
 #define OUTBOX_SIZE 512
 
-enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70 };
+enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_RING = 67, TYPE_RING_END = 68, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70 };
 
 static LinkHandlers s_handlers;
 
@@ -84,12 +84,33 @@ static void prv_on_request(DictionaryIterator *in) {
   if (s_handlers.on_request) s_handlers.on_request(&request);
 }
 
+static void prv_on_ring(DictionaryIterator *in) {
+  const char *chat_id = prv_text(in, MESSAGE_KEY_CHAT_ID);
+  const char *title = prv_text(in, MESSAGE_KEY_TITLE);
+  LinkRing ring = {
+    .request_id = prv_text(in, MESSAGE_KEY_REQUEST_ID),
+    .chat_id = chat_id ? chat_id : "",
+    .title = title ? title : "Hermes",
+    .approval = prv_int(dict_find(in, MESSAGE_KEY_APPROVAL)) == 1,
+    .agent = prv_int(dict_find(in, MESSAGE_KEY_AGENT)) == 1,
+    .answering = (Answering)prv_int(dict_find(in, MESSAGE_KEY_ANSWERING)),
+  };
+  if (!ring.request_id || ring.answering > ANSWER_CHOICES_OR_TEXT) return;
+  if (s_handlers.on_ring) s_handlers.on_ring(&ring);
+}
+
 static void prv_inbox_received(DictionaryIterator *in, void *context) {
   switch (prv_int(dict_find(in, MESSAGE_KEY_TYPE))) {
     case TYPE_REPLY: prv_on_reply(in); break;
     case TYPE_STATUS: prv_on_status(in); break;
     case TYPE_CHAT_ITEM: prv_on_chat_item(in); break;
     case TYPE_REQUEST: prv_on_request(in); break;
+    case TYPE_RING: prv_on_ring(in); break;
+    case TYPE_RING_END: {
+      const char *id = prv_text(in, MESSAGE_KEY_REQUEST_ID);
+      if (id && s_handlers.on_ring_end) s_handlers.on_ring_end(id);
+      break;
+    }
     case TYPE_REQUEST_END: {
       const char *id = prv_text(in, MESSAGE_KEY_REQUEST_ID);
       if (id && s_handlers.on_request_end) s_handlers.on_request_end(id, prv_text(in, MESSAGE_KEY_ERROR));
@@ -109,11 +130,16 @@ static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason,
   if (s_handlers.on_send_failed) s_handlers.on_send_failed(prv_int(type));
 }
 
+static void prv_outbox_sent(DictionaryIterator *iter, void *context) {
+  if (s_handlers.on_sent) s_handlers.on_sent(prv_int(dict_find(iter, MESSAGE_KEY_TYPE)));
+}
+
 void link_open(LinkHandlers handlers) {
   s_handlers = handlers;
   app_message_register_inbox_received(prv_inbox_received);
   app_message_register_inbox_dropped(prv_inbox_dropped);
   app_message_register_outbox_failed(prv_outbox_failed);
+  app_message_register_outbox_sent(prv_outbox_sent);
   app_message_open(INBOX_SIZE, OUTBOX_SIZE);
 }
 
@@ -180,6 +206,21 @@ bool link_answer(const char *request_id, int index, const char *text) {
   dict_write_cstring(out, MESSAGE_KEY_REQUEST_ID, request_id);
   dict_write_int32(out, MESSAGE_KEY_INDEX, index);
   if (text) dict_write_cstring(out, MESSAGE_KEY_TEXT, text);
+  return prv_send();
+}
+
+bool link_ring_on(const char *request_id) {
+  DictionaryIterator *out;
+  if (!prv_begin(&out, LINK_RING_ON)) return false;
+  dict_write_cstring(out, MESSAGE_KEY_REQUEST_ID, request_id);
+  return prv_send();
+}
+
+bool link_ring_end(const char *request_id, bool answered) {
+  DictionaryIterator *out;
+  if (!prv_begin(&out, LINK_RING_END)) return false;
+  dict_write_cstring(out, MESSAGE_KEY_REQUEST_ID, request_id);
+  dict_write_int32(out, MESSAGE_KEY_ANSWERED, answered ? 1 : 0);
   return prv_send();
 }
 

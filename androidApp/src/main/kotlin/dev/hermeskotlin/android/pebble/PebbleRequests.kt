@@ -43,6 +43,9 @@ class PebbleRequests(
     // Only touched on the main thread.
     private val shown = mutableSetOf<String>()
 
+    /** Requests picked up from a ring, in any chat, and the Pebble each shows on. Only touched on the main thread. */
+    private val fromRings = mutableMapOf<String, String>()
+
     private val on: Boolean get() = settings.settings.value?.pebbleAnswers == true
 
     fun start() {
@@ -87,6 +90,18 @@ class PebbleRequests(
         outbox.watch(watch).message(
             PebbleLink.request(request.id, chatId, title, view.approval, view.heading, view.detail, view.choices, view.answering.ordinal),
         )
+    }
+
+    /** Picked up on [watch] from a ring: [request], waiting in chat [chatId] ([title]), shows there until it's [gone]. */
+    fun showFromRing(watch: String, request: InputRequest, chatId: String?, title: String?) {
+        fromRings[request.id] = watch
+        show(watch, request, chatId, title)
+    }
+
+    /** Request [requestId] is answered or over: a Pebble showing it from a ring closes it. */
+    fun gone(requestId: String) {
+        val watch = fromRings.remove(requestId) ?: return
+        outbox.watch(watch).message(PebbleLink.requestEnd(requestId))
     }
 
     /** What [watch] answered: given only while answering on the Pebble is on, and the watch told how it went. */

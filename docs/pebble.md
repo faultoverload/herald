@@ -405,7 +405,7 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
    - Rings as in §4.4, whether or not the gateway talks live: `startAppOnTheWatch`, then `RING`.
    - The ring window has a custom vibration pattern and a speaker ringtone on the Time 2. The watch replies with `RING_ON`.
    - *Answer*, with the setting on, opens the request on the watch (3).
-   - *Answer*, with the setting off, says "Answer on your phone" and brings up the phone's call screen.
+   - *Answer*, with the setting off (and always for a call from the agent), stops the watch ringing and says "Answer on your phone"; the phone rings on.
    - *Decline* goes both ways (decline on the watch stops the phone, and the reverse).
 5. **Closed-app delivery:** when the turn's `Done` gets `NotOpen`, Herald posts its usual reply notification for that chat, which the Pebble app mirrors. Its Reply action works with the Pebble app's *showsUserInterface* setting on, and by default once [#1](https://github.com/faultoverload/herald/issues/1) is fixed.
 
@@ -422,6 +422,12 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
     - An `ActionMenu` callback's `context` is the menu's, not the item's, so every pick sent the first choice. Fixed: the choice index now comes from `action_menu_item_get_action_data`.
     - With a dictation session per screen, the question's dictated answer went to the talk screen and was sent as a new message. Fixed: the app now has one session (`dictate.c`), whose result goes to the screen that started it.
   - Approvals were checked only in unit tests and on the emulator. The test gateway has approvals off.
+- ✅ Rings (4), with a question from a chat not on screen:
+  - The phone opens Herald on the watch (`startAppOnTheWatch`), holds the `RING` until it has opened, and the watch says `RING_ON` within a second.
+  - *Answer* with the setting on shows the question, and its answer goes through. *Decline* stops the phone, which posts the usual notification, and Herald on the watch closes when it was opened for the ring. With the setting off, *Answer* says to answer on the phone, which rings on.
+  - Watches stop each other: whichever ends a ring, the phone tells every other Wear OS watch and Pebble (`ChatNotifications.AllRings`). A request picked up from a ring closes on the watch once it's answered anywhere (`AlsoRings.gone`).
+  - Only Pebbles that Herald has heard from ring, so the watchapp has to be opened once after it's installed.
+  - Known limit: with a Wear OS watch and a Pebble both paired, the phone's call can show on a watch that is ringing itself, when the other watch doesn't confirm its ring in time.
 
 ### Phase 4: glanceables and polish
 
@@ -476,7 +482,7 @@ Device test script for each phase:
 
    Each PR ticks ROADMAP.
 2. **Approving from the wrist.** ✅ *Decided:* (b), both questions and approvals answerable on the Pebble, **behind a setting that is off by default** and says that it skips the phone's unlock. Off, the watch says to answer on the phone. See Phase 3, steps 2–3.
-3. **What "Answer" does on a Pebble ring.** ✅ *Decided:* show it on the watch. With the setting on, Answer opens the question or approval there. With it off, the watch says to answer on the phone and the phone's call screen comes up. See Phase 3, step 4.
+3. **What "Answer" does on a Pebble ring.** ✅ *Decided:* show it on the watch. With the setting on, Answer opens the question or approval there. With it off, the watch stops ringing and says to answer on the phone, which rings on. See Phase 3, step 4.
 4. **C or Alloy.** ✅ *C*, as built in Phases 1–2.
 5. **Which Pebble models** count as done: Time 2 only, or every model in Phase 5.
 6. **Which phone Pebble app** to support: the Core app (≥ 1.0.7.7), plus microPebble if it's easy (PebbleKit 2 supports both).

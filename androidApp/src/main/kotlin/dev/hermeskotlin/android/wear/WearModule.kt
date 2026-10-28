@@ -2,6 +2,7 @@ package dev.hermeskotlin.android.wear
 
 import dev.hermeskotlin.android.pebble.PebbleOutbox
 import dev.hermeskotlin.android.pebble.PebbleRequests
+import dev.hermeskotlin.android.pebble.PebbleRinger
 import dev.hermeskotlin.android.pebble.RoutingOutbox
 import dev.hermeskotlin.core.wear.WatchOutbox
 import dev.hermeskotlin.core.wear.WatchRelay
@@ -19,6 +20,7 @@ val wearModule = module {
     single { PebbleOutbox(androidContext(), get(), get(), get()) }
     single<WatchOutbox> { RoutingOutbox(PhoneOutbox(androidContext()), get()) }
     single { PebbleRequests(get(), get(), get(), get(), get()) }
+    single { PebbleRinger(androidContext(), get(), get(), get(), get()) }
     single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get(), get()) }
     single { WearRequests(get(), get()) }
