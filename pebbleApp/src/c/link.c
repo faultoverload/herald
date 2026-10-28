@@ -34,6 +34,7 @@ static void prv_on_reply(DictionaryIterator *in) {
     .title = prv_text(in, MESSAGE_KEY_TITLE),
     .activity = prv_text(in, MESSAGE_KEY_ACTIVITY),
     .error = prv_text(in, MESSAGE_KEY_ERROR),
+    .said = prv_text(in, MESSAGE_KEY_SAID),
     .text = text ? text : "",
     .text_offset = prv_int(dict_find(in, MESSAGE_KEY_TEXT_OFFSET)),
     .text_total = prv_int(dict_find(in, MESSAGE_KEY_TEXT_TOTAL)),
@@ -53,12 +54,23 @@ static void prv_on_status(DictionaryIterator *in) {
   if (s_handlers.on_status) s_handlers.on_status(&status);
 }
 
+static void prv_on_chat_item(DictionaryIterator *in) {
+  LinkChatItem item = {
+    .index = prv_int(dict_find(in, MESSAGE_KEY_INDEX)),
+    .count = prv_int(dict_find(in, MESSAGE_KEY_COUNT)),
+    .chat_id = prv_text(in, MESSAGE_KEY_CHAT_ID),
+    .title = prv_text(in, MESSAGE_KEY_TITLE),
+    .ago = prv_text(in, MESSAGE_KEY_AGO),
+    .error = prv_text(in, MESSAGE_KEY_ERROR),
+  };
+  if (s_handlers.on_chat_item) s_handlers.on_chat_item(&item);
+}
+
 static void prv_inbox_received(DictionaryIterator *in, void *context) {
   switch (prv_int(dict_find(in, MESSAGE_KEY_TYPE))) {
     case TYPE_REPLY: prv_on_reply(in); break;
     case TYPE_STATUS: prv_on_status(in); break;
-    // The chats come with the chats screen (Phase 3).
-    case TYPE_CHAT_ITEM: break;
+    case TYPE_CHAT_ITEM: prv_on_chat_item(in); break;
     default: break;
   }
 }
@@ -115,6 +127,19 @@ bool link_status_request(const char *accent_rev) {
   DictionaryIterator *out;
   if (!prv_begin(&out, LINK_STATUS_REQ)) return false;
   if (accent_rev && accent_rev[0]) dict_write_cstring(out, MESSAGE_KEY_ACCENT_REV, accent_rev);
+  return prv_send();
+}
+
+bool link_chats_request(void) {
+  DictionaryIterator *out;
+  if (!prv_begin(&out, LINK_CHATS_REQ)) return false;
+  return prv_send();
+}
+
+bool link_history_request(const char *chat_id) {
+  DictionaryIterator *out;
+  if (!prv_begin(&out, LINK_HISTORY_REQ)) return false;
+  dict_write_cstring(out, MESSAGE_KEY_CHAT_ID, chat_id);
   return prv_send();
 }
 

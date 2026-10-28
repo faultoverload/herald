@@ -36,7 +36,8 @@
       "APPROVAL": 22,
       "AGENT": 23,
       "ANSWERED": 24,
-      "VERSION": 25
+      "VERSION": 25,
+      "SAID": 26
     },
     "companionApp": {
       "android": {

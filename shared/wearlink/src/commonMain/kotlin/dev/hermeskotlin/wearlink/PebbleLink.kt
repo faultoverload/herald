@@ -44,6 +44,8 @@ object PebbleKeys {
     const val AGENT = 23
     const val ANSWERED = 24
     const val VERSION = 25
+    /** What was said for the turn on screen, when the watch didn't say it itself (a chat's last exchange). */
+    const val SAID = 26
 
     /** Every key by its name in package.json. */
     val byName: Map<String, Int> = mapOf(
@@ -52,7 +54,7 @@ object PebbleKeys {
         "ERROR" to ERROR, "CHAT_ID" to CHAT_ID, "INDEX" to INDEX, "COUNT" to COUNT, "AGO" to AGO, "FLAGS" to FLAGS,
         "ACCENT_REV" to ACCENT_REV, "ACCENT_FILL" to ACCENT_FILL, "ACCENT_TEXT" to ACCENT_TEXT,
         "ACCENT_ON_FILL" to ACCENT_ON_FILL, "ACCENT_DIM" to ACCENT_DIM, "REQUEST_ID" to REQUEST_ID,
-        "APPROVAL" to APPROVAL, "AGENT" to AGENT, "ANSWERED" to ANSWERED, "VERSION" to VERSION,
+        "APPROVAL" to APPROVAL, "AGENT" to AGENT, "ANSWERED" to ANSWERED, "VERSION" to VERSION, "SAID" to SAID,
     )
 }
 
@@ -68,6 +70,8 @@ object PebbleTypes {
     const val RING_END_FROM_WATCH = 6
     /** The watch was told to add text past what it has (it restarted unseen): the phone sends the reply again from 0. */
     const val RESYNC = 7
+    /** [PebbleKeys.CHAT_ID]'s last exchange, for the watch opening that chat: it comes as a finished [REPLY]. */
+    const val HISTORY_REQ = 8
 
     const val REPLY = 64
     /** One of the recent chats, [PebbleKeys.INDEX] of [PebbleKeys.COUNT]; a count of 0 is an empty list or its [PebbleKeys.ERROR]. */
@@ -86,6 +90,7 @@ sealed interface PebbleIncoming {
     data class RingOn(val requestId: String) : PebbleIncoming
     data class RingEnd(val requestId: String, val answered: Boolean) : PebbleIncoming
     data class Resync(val askId: String) : PebbleIncoming
+    data class HistoryRequest(val chatId: String) : PebbleIncoming
 }
 
 object PebbleLink {
@@ -110,6 +115,7 @@ object PebbleLink {
     private const val MAX_TITLE_BYTES = 60
     private const val MAX_ACTIVITY_BYTES = 60
     private const val MAX_ERROR_BYTES = 120
+    private const val MAX_SAID_BYTES = 200
 
     /** [dict]'s size on the watch, as `dict_calc_buffer_size` counts it: a 7-byte header per value, text with its NUL. */
     fun size(dict: PebbleDict): Int = 1 + dict.values.sumOf {
@@ -135,6 +141,7 @@ object PebbleLink {
             PebbleTypes.RING_ON -> PebbleIncoming.RingOn(text(PebbleKeys.REQUEST_ID) ?: return null)
             PebbleTypes.RING_END_FROM_WATCH -> PebbleIncoming.RingEnd(text(PebbleKeys.REQUEST_ID) ?: return null, num(PebbleKeys.ANSWERED) == 1)
             PebbleTypes.RESYNC -> PebbleIncoming.Resync(text(PebbleKeys.ASK_ID) ?: return null)
+            PebbleTypes.HISTORY_REQ -> PebbleIncoming.HistoryRequest(text(PebbleKeys.CHAT_ID)?.takeIf { it.isNotEmpty() } ?: return null)
             else -> null
         }
     }
@@ -158,7 +165,15 @@ object PebbleLink {
         update.title?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.TITLE, text(clipUtf8(it, MAX_TITLE_BYTES))) }
         update.activity?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.ACTIVITY, text(clipUtf8(it, MAX_ACTIVITY_BYTES))) }
         update.error?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.ERROR, text(clipUtf8(it, MAX_ERROR_BYTES))) }
+        update.heard?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.SAID, text(clipUtf8(plainText(it), MAX_SAID_BYTES))) }
     }
+
+    /** The ask a chat's last exchange comes as: never one the watch made, so it's never taken for a running turn. */
+    fun historyAskId(chatId: String): String = "h:$chatId"
+
+    /** [chatId]'s last exchange as a finished turn: what was [said], and the [reply]. */
+    fun history(chatId: String, title: String?, said: String?, reply: String): ReplyUpdate =
+        ReplyUpdate(historyAskId(chatId), ReplyPhase.Done, chatId = chatId, title = title, heard = said, text = reply)
 
     /** How the phone stands, and its accent when the watch's is out of date. */
     fun status(status: PhoneStatus): PebbleDict = buildMap {

@@ -28,6 +28,7 @@ typedef struct {
   const char *title;     // NULL when unchanged
   const char *activity;  // NULL for none
   const char *error;     // NULL for none
+  const char *said;      // what was said, when the phone tells it (a chat's last exchange); else NULL
   const char *text;
   int text_offset;
   int text_total;
@@ -40,8 +41,19 @@ typedef struct {
   uint32_t fill, text, on_fill, dim;  // 0xRRGGBB
 } LinkStatus;
 
+// One of the recent chats, [index] of [count]; a count of 0 is an empty list, or [error] when it couldn't be read.
+typedef struct {
+  int index;
+  int count;
+  const char *chat_id;
+  const char *title;
+  const char *ago;    // NULL when the chat has no activity time
+  const char *error;  // NULL for none
+} LinkChatItem;
+
 typedef struct {
   void (*on_reply)(const LinkReply *reply);
+  void (*on_chat_item)(const LinkChatItem *item);
   void (*on_status)(const LinkStatus *status);
   // A message to the phone that didn't go, by its type.
   void (*on_send_failed)(int type);
@@ -53,6 +65,7 @@ enum {
   LINK_CHATS_REQ = 3,
   LINK_STATUS_REQ = 4,
   LINK_RESYNC = 7,
+  LINK_HISTORY_REQ = 8,
 };
 
 // Opens AppMessage with the inbox the phone's messages are sized for.
@@ -62,6 +75,9 @@ void link_open(LinkHandlers handlers);
 bool link_ask(const char *ask_id, const char *text, const char *chat_id);
 bool link_stop(const char *ask_id);
 bool link_status_request(const char *accent_rev);
+bool link_chats_request(void);
+// [chat_id]'s last exchange, which comes as a finished reply.
+bool link_history_request(const char *chat_id);
 bool link_resync(const char *ask_id);
 
 // Whether the Pebble phone app is connected at all.

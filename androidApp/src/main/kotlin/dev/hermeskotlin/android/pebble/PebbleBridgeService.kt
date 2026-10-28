@@ -2,13 +2,22 @@ package dev.hermeskotlin.android.pebble
 
 import android.util.Log
 import dev.hermeskotlin.android.notify.ChatNotifier
+import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.wear.lastExchange
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.ui.voice.watchAccent
 import dev.hermeskotlin.wearlink.PebbleIncoming
 import dev.hermeskotlin.wearlink.PebbleKeys
 import dev.hermeskotlin.wearlink.PebbleLink
 import dev.hermeskotlin.wearlink.PebbleLink.toWatchAsk
+import dev.hermeskotlin.wearlink.ReplyPhase
+import dev.hermeskotlin.wearlink.ReplyUpdate
 import io.rebble.pebblekit2.client.BasePebbleListenerService
 import io.rebble.pebblekit2.common.model.PebbleDictionary
 import io.rebble.pebblekit2.common.model.ReceiveResult
@@ -32,6 +41,10 @@ class PebbleBridgeService : BasePebbleListenerService() {
     private val notifier: ChatNotifier by inject()
     private val settings: SettingsStore by inject()
     private val scope: CoroutineScope by inject()
+    private val gateways: GatewayRepository by inject()
+    private val auth: AuthApi by inject()
+    private val sessions: SessionsApi by inject()
+    private val profiles: ProfileStore by inject()
 
     // Called on the main thread.
     override suspend fun onMessageReceived(watchappUUID: UUID, data: PebbleDictionary, watch: WatchIdentifier): ReceiveResult {
@@ -59,11 +72,31 @@ class PebbleBridgeService : BasePebbleListenerService() {
                 relay.status(node, accent = accent.updateFor(incoming.accentRevision))
             }
             is PebbleIncoming.Resync -> outbox.watch(node).resync(incoming.askId)
+            is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId) }
             // Rings come with the watchapp's ring screen.
             is PebbleIncoming.RingOn, is PebbleIncoming.RingEnd -> Unit
         }
         return ReceiveResult.Ack
     }
+
+    /** [chatId]'s last exchange, for the watch opening it, as a finished turn; why not, when it can't be read. */
+    private suspend fun sendHistory(node: String, chatId: String) {
+        val saved = gateways.current()
+        val update = if (saved == null || !auth.hasStoredSession(saved.gatewayUrl)) {
+            failedHistory(chatId, WatchRelay.SIGNED_OUT)
+        } else {
+            when (val result = sessions.messages(saved.gatewayUrl, chatId, limit = HISTORY_ROWS, profile = profiles.get(saved.gatewayUrl))) {
+                is ApiResult.Success -> lastExchange(result.value.messages)
+                    ?.let { PebbleLink.history(chatId, null, it.said, it.reply) }
+                    ?: PebbleLink.history(chatId, null, null, "Nothing here yet. Press Select to ask.")
+                else -> failedHistory(chatId, result.errorMessage ?: "Couldn't read this chat.")
+            }
+        }
+        outbox.watch(node).reply(update)
+    }
+
+    private fun failedHistory(chatId: String, error: String) =
+        ReplyUpdate(PebbleLink.historyAskId(chatId), ReplyPhase.Failed, chatId = chatId, error = error)
 
     override fun onAppOpened(watchappUUID: UUID, watch: WatchIdentifier) {
         if (watchappUUID == PebbleOutbox.APP_UUID) outbox.watch(PebbleOutbox.nodeOf(watch)).opened()
@@ -75,5 +108,8 @@ class PebbleBridgeService : BasePebbleListenerService() {
 
     private companion object {
         const val TAG = "HeraldPebble"
+
+        /** Enough of a chat's newest rows to reach back past a long turn's tool steps to its prompt. */
+        const val HISTORY_ROWS = 40
     }
 }

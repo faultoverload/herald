@@ -1,4 +1,5 @@
 #include "talk.h"
+#include "chats.h"
 
 // PebbleLink.MAX_REPLY_BYTES: the phone never sends more.
 #define MAX_REPLY 6000
@@ -51,6 +52,8 @@ static char s_said[300];
 static char s_reply[MAX_REPLY + 1];
 static int s_reply_len;
 static Phase s_phase;
+// A chat's last exchange was asked for and hasn't come.
+static bool s_loading_chat;
 static char s_activity[128];
 static char s_error[128];
 static int s_ask_count;
@@ -100,6 +103,7 @@ static const char *prv_activity_line(void) {
     return s_error[0] ? s_error : "Something went wrong.";
   }
   if (prv_running()) return s_activity[0] ? s_activity : prv_phase_line();
+  if (s_loading_chat) return "Opening the chat...";
   const char *problem = prv_phone_problem_short();
   if (problem) return problem;
   return s_has_turn ? "Select to reply" : "Select to talk";
@@ -163,10 +167,12 @@ static void prv_redraw(void) {
     text_layer_set_text(s_reply_layer, s_error[0] ? s_error : "Something went wrong.");
   } else if (s_has_turn) {
     text_layer_set_text(s_reply_layer, s_reply);
+  } else if (s_loading_chat) {
+    text_layer_set_text(s_reply_layer, "");
   } else {
     // Nothing asked yet: what's wrong, or how to start.
     const char *problem = prv_phone_problem();
-    text_layer_set_text(s_reply_layer, problem ? problem : "Press Select and speak to Hermes.\n\nHold Select for a new chat.");
+    text_layer_set_text(s_reply_layer, problem ? problem : "Press Select and speak to Hermes.\n\nHold Select for your chats.");
   }
   prv_layout();
 }
@@ -203,6 +209,12 @@ void talk_on_status(const LinkStatus *status) {
   else if (status->flags & LINK_FLAG_FAILED) s_phone = PHONE_UNREACHABLE;
   else if (status->flags & LINK_FLAG_CONNECTED) s_phone = PHONE_READY;
   else s_phone = PHONE_RECONNECTING;
+  // Opened in a chat with no turn to show: its last exchange, once the phone's there to send it.
+  static bool s_asked_history;
+  if (!s_asked_history && !s_has_turn && s_chat_id[0] && s_phone == PHONE_READY) {
+    s_asked_history = true;
+    s_loading_chat = link_history_request(s_chat_id);
+  }
   if (status->has_accent) {
     // The phone's dark accent: its fill for the header, its on-fill for the header's text.
     s_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(status->fill), GColorBlack);
@@ -262,6 +274,7 @@ void talk_on_send_failed(int type) {
 }
 
 void talk_on_reply(const LinkReply *reply) {
+  s_loading_chat = false;
   if (!s_has_turn || strcmp(reply->ask_id, s_ask_id) != 0) {
     // Another ask's turn: one from before this app opened, which the phone sends again on opening.
     s_has_turn = true;
@@ -286,6 +299,7 @@ void talk_on_reply(const LinkReply *reply) {
   s_phase = reply->phase;
   prv_copy(s_activity, sizeof(s_activity), reply->activity);
   prv_copy(s_error, sizeof(s_error), reply->error);
+  if (reply->said) prv_copy(s_said, sizeof(s_said), reply->said);
   if (reply->chat_id && reply->chat_id[0] && strcmp(reply->chat_id, s_chat_id) != 0) {
     prv_copy(s_chat_id, sizeof(s_chat_id), reply->chat_id);
     persist_write_string(KEY_CHAT_ID, s_chat_id);
@@ -303,14 +317,22 @@ void talk_on_reply(const LinkReply *reply) {
   prv_redraw();
 }
 
-static void prv_new_chat(void) {
-  s_chat_id[0] = '\0';
-  s_chat_title[0] = '\0';
-  persist_delete(KEY_CHAT_ID);
-  persist_delete(KEY_CHAT_TITLE);
+// Talks in [chat_id] from the next ask on; an empty id is a new chat.
+static void prv_use_chat(const char *chat_id, const char *title) {
+  prv_copy(s_chat_id, sizeof(s_chat_id), chat_id);
+  prv_copy(s_chat_title, sizeof(s_chat_title), title);
+  if (s_chat_id[0]) {
+    persist_write_string(KEY_CHAT_ID, s_chat_id);
+    persist_write_string(KEY_CHAT_TITLE, s_chat_title);
+  } else {
+    persist_delete(KEY_CHAT_ID);
+    persist_delete(KEY_CHAT_TITLE);
+  }
   s_has_turn = false;
   s_said[0] = '\0';
   s_ask_id[0] = '\0';
+  // An old chat opens on its last exchange.
+  s_loading_chat = s_chat_id[0] && link_history_request(s_chat_id);
   scroll_layer_set_content_offset(s_scroll_layer, GPointZero, false);
   prv_redraw();
 }
@@ -332,7 +354,11 @@ static void prv_select(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void prv_menu_new_chat(ActionMenu *menu, const ActionMenuItem *item, void *context) {
-  prv_new_chat();
+  prv_use_chat("", "");
+}
+
+static void prv_menu_chats(ActionMenu *menu, const ActionMenuItem *item, void *context) {
+  chats_open(s_chat_id, s_fill, s_on_fill, prv_use_chat);
 }
 
 static void prv_menu_stop(ActionMenu *menu, const ActionMenuItem *item, void *context) {
@@ -354,9 +380,10 @@ static void prv_menu_closed(ActionMenu *menu, const ActionMenuItem *performed, v
 }
 
 static void prv_menu(ClickRecognizerRef recognizer, void *context) {
-  ActionMenuLevel *root = action_menu_level_create(3);
+  ActionMenuLevel *root = action_menu_level_create(4);
   if (prv_running()) action_menu_level_add_action(root, "Stop", prv_menu_stop, NULL);
   action_menu_level_add_action(root, "New chat", prv_menu_new_chat, NULL);
+  action_menu_level_add_action(root, "Chats", prv_menu_chats, NULL);
   action_menu_level_add_action(root, "Check phone", prv_menu_check_phone, NULL);
   ActionMenuConfig config = {
     .root_level = root,

@@ -80,11 +80,22 @@ class PebbleLinkTest {
             title = long,
             activity = long,
             error = long,
+            heard = long,
         )
         // A chunk of four-byte characters, as many as fit.
         val chunk = takeUtf8("🙂".repeat(1_000), PebbleLink.CHUNK_BYTES)
         val dict = PebbleLink.reply(update, offset = 0, chunk = chunk, total = 5_000)
         assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES, "size ${PebbleLink.size(dict)}")
+    }
+
+    @Test
+    fun aChatsLastExchangeComesAsAFinishedTurnWithWhatWasSaid() {
+        assertEquals(PebbleIncoming.HistoryRequest("c1"), PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.HISTORY_REQ), PebbleKeys.CHAT_ID to text("c1"))))
+        val update = PebbleLink.history("c1", "Plans", said = "What's **on**?", reply = "Nothing.")
+        assertEquals(ReplyPhase.Done, update.phase)
+        val dict = PebbleLink.reply(update, offset = 0, chunk = "Nothing.", total = 8)
+        assertEquals(text("What's on?"), dict[PebbleKeys.SAID])
+        assertEquals(text("h:c1"), dict[PebbleKeys.ASK_ID])
     }
 
     @Test
