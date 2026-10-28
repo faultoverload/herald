@@ -52,6 +52,10 @@ object PebbleKeys {
     const val CHOICES = 28
     /** How the watch answers a request: 0 on the phone only, 1 by a choice, 2 by a choice or dictating. */
     const val ANSWERING = 29
+    /** Which prompts the watch has, so the phone sends them only when they changed. */
+    const val PROMPTS_REV = 30
+    /** The prompts the watch's hold-Select menu offers, one per line. */
+    const val PROMPTS = 31
 
     /** Every key by its name in package.json. */
     val byName: Map<String, Int> = mapOf(
@@ -61,7 +65,8 @@ object PebbleKeys {
         "ACCENT_REV" to ACCENT_REV, "ACCENT_FILL" to ACCENT_FILL, "ACCENT_TEXT" to ACCENT_TEXT,
         "ACCENT_ON_FILL" to ACCENT_ON_FILL, "ACCENT_DIM" to ACCENT_DIM, "REQUEST_ID" to REQUEST_ID,
         "APPROVAL" to APPROVAL, "AGENT" to AGENT, "ANSWERED" to ANSWERED, "VERSION" to VERSION, "SAID" to SAID,
-        "DETAIL" to DETAIL, "CHOICES" to CHOICES, "ANSWERING" to ANSWERING,
+        "DETAIL" to DETAIL, "CHOICES" to CHOICES, "ANSWERING" to ANSWERING, "PROMPTS_REV" to PROMPTS_REV,
+        "PROMPTS" to PROMPTS,
     )
 }
 
@@ -71,7 +76,10 @@ object PebbleTypes {
     const val ASK = 1
     const val STOP = 2
     const val CHATS_REQ = 3
-    /** With [PebbleKeys.ACCENT_REV], the accent the watch has; the phone answers with [STATUS]. */
+    /**
+     * With [PebbleKeys.ACCENT_REV], the accent the watch has, and [PebbleKeys.PROMPTS_REV], its prompts; the phone
+     * answers with [STATUS], and [PROMPTS] when the watch's are out of date.
+     */
     const val STATUS_REQ = 4
     /** The watch rings for request [PebbleKeys.REQUEST_ID]. */
     const val RING_ON = 5
@@ -95,6 +103,8 @@ object PebbleTypes {
     const val REQUEST = 69
     /** Request [PebbleKeys.REQUEST_ID] is over: answered (here or elsewhere), or the watch's answer failed with [PebbleKeys.ERROR]. */
     const val REQUEST_END = 70
+    /** The prompts to offer ([PebbleKeys.PROMPTS]) and their revision ([PebbleKeys.PROMPTS_REV]), which the watch keeps. */
+    const val PROMPTS = 71
 }
 
 /** What the watch sent, read from its dictionary. */
@@ -102,7 +112,7 @@ sealed interface PebbleIncoming {
     data class Ask(val id: String, val text: String, val chatId: String?) : PebbleIncoming
     data class Stop(val askId: String) : PebbleIncoming
     data object ChatsRequest : PebbleIncoming
-    data class StatusRequest(val accentRevision: String?) : PebbleIncoming
+    data class StatusRequest(val accentRevision: String?, val promptsRevision: String? = null) : PebbleIncoming
     data class RingOn(val requestId: String) : PebbleIncoming
     data class RingEnd(val requestId: String, val answered: Boolean) : PebbleIncoming
     data class Resync(val askId: String) : PebbleIncoming
@@ -138,6 +148,8 @@ object PebbleLink {
     private const val MAX_CHOICE_BYTES = 60
     /** Hermes offers up to 4 choices to a question; an approval 3. */
     const val MAX_CHOICES = 6
+    /** As many prompts as the watch keeps. */
+    const val MAX_PROMPTS = 6
 
     /** [dict]'s size on the watch, as `dict_calc_buffer_size` counts it: a 7-byte header per value, text with its NUL. */
     fun size(dict: PebbleDict): Int = 1 + dict.values.sumOf {
@@ -159,7 +171,10 @@ object PebbleLink {
             )
             PebbleTypes.STOP -> PebbleIncoming.Stop(text(PebbleKeys.ASK_ID) ?: return null)
             PebbleTypes.CHATS_REQ -> PebbleIncoming.ChatsRequest
-            PebbleTypes.STATUS_REQ -> PebbleIncoming.StatusRequest(text(PebbleKeys.ACCENT_REV)?.takeIf { it.isNotEmpty() })
+            PebbleTypes.STATUS_REQ -> PebbleIncoming.StatusRequest(
+                text(PebbleKeys.ACCENT_REV)?.takeIf { it.isNotEmpty() },
+                text(PebbleKeys.PROMPTS_REV)?.takeIf { it.isNotEmpty() },
+            )
             PebbleTypes.RING_ON -> PebbleIncoming.RingOn(text(PebbleKeys.REQUEST_ID) ?: return null)
             PebbleTypes.RING_END_FROM_WATCH -> PebbleIncoming.RingEnd(text(PebbleKeys.REQUEST_ID) ?: return null, num(PebbleKeys.ANSWERED) == 1)
             PebbleTypes.RESYNC -> PebbleIncoming.Resync(text(PebbleKeys.ASK_ID) ?: return null)
@@ -290,6 +305,20 @@ object PebbleLink {
         put(PebbleKeys.REQUEST_ID, text(requestId))
         error?.let { put(PebbleKeys.ERROR, text(clipUtf8(it, MAX_ERROR_BYTES))) }
     }
+
+    /** [prompts] as the watch keeps them: blank ones left out, each on one line and clipped, no more than [MAX_PROMPTS]. */
+    fun promptLines(prompts: List<String>): List<String> =
+        prompts.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.take(MAX_PROMPTS).map { clipUtf8(it, MAX_CHOICE_BYTES) }
+
+    /** Names [prompts] as the watch has them: the same lines, the same revision. */
+    fun promptsRevision(prompts: List<String>): String = promptLines(prompts).joinToString("\n").hashCode().toUInt().toString(16)
+
+    /** The prompts for the watch's menu, with their [promptsRevision]. */
+    fun prompts(prompts: List<String>): PebbleDict = mapOf(
+        PebbleKeys.TYPE to num(PebbleTypes.PROMPTS),
+        PebbleKeys.PROMPTS_REV to text(promptsRevision(prompts)),
+        PebbleKeys.PROMPTS to text(promptLines(prompts).joinToString("\n")),
+    )
 
     /** The status while Herald's Pebble switch is off, whatever the watch sent. */
     fun off(): PebbleDict = mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS), PebbleKeys.FLAGS to num(FLAG_OFF))

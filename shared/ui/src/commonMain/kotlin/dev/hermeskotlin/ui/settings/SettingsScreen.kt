@@ -195,11 +195,12 @@ fun SettingsScreen(
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var connectedDevicesOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !connectedDevicesOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -224,6 +225,7 @@ fun SettingsScreen(
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenConnectedDevices = { connectedDevicesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -235,6 +237,9 @@ fun SettingsScreen(
             onChange = { text -> viewModel.update { it.copy(startInstruction = text) } },
             onBack = { startInstructionOpen = false },
         )
+    }
+    if (connectedDevicesOpen) {
+        ConnectedDevicesScreen(settings, onUpdate = viewModel::update, onBack = { connectedDevicesOpen = false })
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
     ConnectionCheckSheet(
@@ -316,6 +321,7 @@ internal fun SettingsView(
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenConnectedDevices: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -652,34 +658,19 @@ internal fun SettingsView(
                     }
                 }
 
-                Section("Pebble") {
-                    SwitchRow(
-                        title = "Herald on the Pebble",
-                        detail = "Talk to Hermes from Herald's Pebble watchapp, and let it ring there. Off, the watchapp " +
-                            "says so and nothing goes to it.",
-                        checked = settings.pebble,
-                        onCheckedChange = { on -> onUpdate { it.copy(pebble = on) } },
-                        icon = Lucide.Watch,
-                    )
-                    if (settings.pebble) {
-                        Divider()
-                        SwitchRow(
-                            title = "Answer on the Pebble",
-                            detail = "Approvals and questions can be answered on the watch, which doesn't ask for this " +
-                                "phone's unlock: anyone wearing it can answer them.",
-                            checked = settings.pebbleAnswers,
-                            onCheckedChange = { on -> onUpdate { it.copy(pebbleAnswers = on) } },
-                            icon = Lucide.ShieldAlert,
-                        )
-                    }
-                }
-
                 Section("Phone") {
                     NavRow(
                         title = "Phone tools",
                         detail = phoneToolsSummary(settings),
                         icon = Lucide.Smartphone,
                         onClick = onOpenPhoneTools,
+                    )
+                    Divider()
+                    NavRow(
+                        title = "Connected devices",
+                        detail = connectedDevicesSummary(settings),
+                        icon = Lucide.Watch,
+                        onClick = onOpenConnectedDevices,
                     )
                 }
 

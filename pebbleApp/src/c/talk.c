@@ -7,6 +7,8 @@
 
 // PebbleLink.MAX_REPLY_BYTES: the phone never sends more.
 #define MAX_REPLY 6000
+// PebbleLink.MAX_PROMPTS, each clipped to 60 bytes.
+#define MAX_PROMPTS 6
 // The phone answers a status request at once; none within this, Herald isn't there.
 #define ANSWER_WITHIN_MS 5000
 // While open, the phone's state is asked again this often (as the Wear watch does).
@@ -22,11 +24,16 @@
 // The launcher's line under Herald holds 150 bytes.
 #define GLANCE_BYTES 140
 
-// Asked with a press, from the hold-Select menu. Fixed for now.
-static const char *const s_prompts[] = { "Summarize my day", "What's running?", "What needs my attention?" };
+// Asked with a press, from the hold-Select menu: these until the phone sends its own (Settings → Connected devices).
+static char s_prompts[MAX_PROMPTS][64] = { "Summarize my day", "What's running?", "What needs my attention?" };
+static int s_prompt_count = 3;
+static char s_prompts_rev[16];
 
-// Persisted.
-enum { KEY_CHAT_ID = 1, KEY_CHAT_TITLE = 2, KEY_ACCENT_REV = 3, KEY_ACCENT_FILL = 4, KEY_ACCENT_ON_FILL = 5 };
+// Persisted; a prompt each from KEY_PROMPT.
+enum {
+  KEY_CHAT_ID = 1, KEY_CHAT_TITLE = 2, KEY_ACCENT_REV = 3, KEY_ACCENT_FILL = 4, KEY_ACCENT_ON_FILL = 5,
+  KEY_PROMPTS_REV = 6, KEY_PROMPT_COUNT = 7, KEY_PROMPT = 10,
+};
 
 typedef enum {
   PHONE_UNKNOWN,
@@ -204,7 +211,7 @@ static void prv_ask_status(void) {
     prv_redraw();
     return;
   }
-  if (!link_status_request(s_accent_rev)) return;
+  if (!link_status_request(s_accent_rev, s_prompts_rev)) return;
   if (!s_answer_timer) s_answer_timer = app_timer_register(ANSWER_WITHIN_MS, prv_answer_timeout, NULL);
 }
 
@@ -335,6 +342,28 @@ void talk_on_request(const LinkRequest *request) {
   request_show(request, s_fill, s_on_fill);
 }
 
+void talk_on_prompts(const char *revision, const char *lines) {
+  // One per line; none at all leaves the menu without Prompts.
+  s_prompt_count = 0;
+  const char *at = lines;
+  while (*at && s_prompt_count < MAX_PROMPTS) {
+    const char *end = strchr(at, '\n');
+    size_t len = end ? (size_t)(end - at) : strlen(at);
+    if (len >= sizeof(s_prompts[0])) len = sizeof(s_prompts[0]) - 1;
+    if (len > 0) {
+      memcpy(s_prompts[s_prompt_count], at, len);
+      s_prompts[s_prompt_count][len] = '\0';
+      persist_write_string(KEY_PROMPT + s_prompt_count, s_prompts[s_prompt_count]);
+      s_prompt_count++;
+    }
+    if (!end) break;
+    at = end + 1;
+  }
+  persist_write_int(KEY_PROMPT_COUNT, s_prompt_count);
+  prv_copy(s_prompts_rev, sizeof(s_prompts_rev), revision);
+  persist_write_string(KEY_PROMPTS_REV, s_prompts_rev);
+}
+
 void talk_on_ring(const LinkRing *ring) {
   ring_show(ring, s_fill, s_on_fill);
 }
@@ -413,10 +442,10 @@ static void prv_menu_closed(ActionMenu *menu, const ActionMenuItem *performed, v
 static void prv_menu(ClickRecognizerRef recognizer, void *context) {
   ActionMenuLevel *root = action_menu_level_create(5);
   if (prv_running()) action_menu_level_add_action(root, "Stop", prv_menu_stop, NULL);
-  if (!prv_running()) {
-    ActionMenuLevel *prompts = action_menu_level_create(ARRAY_LENGTH(s_prompts));
-    for (unsigned i = 0; i < ARRAY_LENGTH(s_prompts); i++) {
-      action_menu_level_add_action(prompts, s_prompts[i], prv_menu_prompt, (void *)s_prompts[i]);
+  if (!prv_running() && s_prompt_count > 0) {
+    ActionMenuLevel *prompts = action_menu_level_create(s_prompt_count);
+    for (int i = 0; i < s_prompt_count; i++) {
+      action_menu_level_add_action(prompts, s_prompts[i], prv_menu_prompt, s_prompts[i]);
     }
     action_menu_level_add_child(root, prompts, "Prompts");
   }
@@ -562,6 +591,12 @@ void talk_init(void) {
     persist_read_string(KEY_ACCENT_REV, s_accent_rev, sizeof(s_accent_rev));
     s_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_FILL)), GColorBlack);
     s_on_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_ON_FILL)), GColorWhite);
+  }
+  if (persist_exists(KEY_PROMPTS_REV)) {
+    persist_read_string(KEY_PROMPTS_REV, s_prompts_rev, sizeof(s_prompts_rev));
+    s_prompt_count = persist_read_int(KEY_PROMPT_COUNT);
+    if (s_prompt_count > MAX_PROMPTS) s_prompt_count = MAX_PROMPTS;
+    for (int i = 0; i < s_prompt_count; i++) persist_read_string(KEY_PROMPT + i, s_prompts[i], sizeof(s_prompts[i]));
   }
   connection_service_subscribe((ConnectionHandlers) { .pebble_app_connection_handler = prv_phone_connection });
 

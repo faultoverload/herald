@@ -40,7 +40,9 @@
       "SAID": 26,
       "DETAIL": 27,
       "CHOICES": 28,
-      "ANSWERING": 29
+      "ANSWERING": 29,
+      "PROMPTS_REV": 30,
+      "PROMPTS": 31
     },
     "companionApp": {
       "android": {

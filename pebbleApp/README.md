@@ -14,22 +14,24 @@ From the emulator (Pebble Time 2, and Round 2 at the end), with sample chats.
 
 | Talking | At work | Hold Select | Prompts |
 |:---:|:---:|:---:|:---:|
-| <img src="screenshots/talk.png" width="200" alt="A reply on the talk screen, under what was said"> | <img src="screenshots/working.png" width="200" alt="A turn at work, saying what it's doing"> | <img src="screenshots/menu.png" width="200" alt="The menu: Stop, New chat, Chats, Check phone"> | <img src="screenshots/prompts.png" width="200" alt="Three prompts to ask with a press"> |
+| <img src="screenshots/talk.png" width="200" alt="A reply on the talk screen, under what was said"> | <img src="screenshots/working.png" width="200" alt="A turn at work, saying what it's doing"> | <img src="screenshots/menu.png" width="200" alt="The menu: Stop, New chat, Chats, Check phone"> | <img src="screenshots/prompts.png" width="200" alt="Prompts to ask with a press"> |
 | **Chats** | **A question** | **Answering it** | **An approval** |
 | <img src="screenshots/chats.png" width="200" alt="Recent chats, the current one marked"> | <img src="screenshots/question.png" width="200" alt="A question from Hermes, with the chat it's in"> | <img src="screenshots/answer.png" width="200" alt="The question's choices, and Dictate"> | <img src="screenshots/approval.png" width="200" alt="A command waiting for approval"> |
 | **Hermes calling** | **Launcher glance** | **Switched off** | **Round 2** |
 | <img src="screenshots/ring.png" width="200" alt="The ring screen with Answer and Decline"> | <img src="screenshots/glance.png" width="200" alt="Herald in the app list, the last reply under it"> | <img src="screenshots/off.png" width="200" alt="The watch saying Herald on the Pebble is off"> | <img src="screenshots/round-talk.png" width="200" alt="A reply on a round screen, following its edge"> |
 
-On the phone, **Settings → Pebble** has the two switches the watchapp answers to:
+On the phone, **Settings → Connected devices** (in the Phone section) holds what the watchapp answers to:
 
 | Light | Dark |
 |:---:|:---:|
-| <img src="screenshots/settings-light.jpg" width="280" alt="Settings, Pebble section, light theme"> | <img src="screenshots/settings-dark.jpg" width="280" alt="Settings, Pebble section, dark theme"> |
+| <img src="screenshots/connected-devices-light.jpg" width="280" alt="Connected devices: the Pebble switches and prompts, light theme"> | <img src="screenshots/connected-devices-dark.jpg" width="280" alt="Connected devices: the Pebble switches and prompts, dark theme"> |
 
 - **Herald on the Pebble** (on): off, the watchapp says so and Herald sends it nothing: no turns, no rings, no
   questions.
 - **Answer on the Pebble** (off): approvals and questions can be answered on the watch, as they come or when it
   rings. It's off by default because the watch doesn't ask for the phone's unlock: anyone wearing it can answer.
+- **Pebble prompts:** what the watch's hold-Select menu offers to ask with one press. Add, edit or remove up to six;
+  they reach the watch the next time it checks in with the phone, and stay there.
 
 Rings are turned on in **Settings → Phone tools → Calls**, the same as for a Wear OS watch: ringing for answers,
 and **Ring my watch too**.
@@ -47,7 +49,7 @@ and **Ring my watch too**.
 |---|---|
 | **Select**, or a tap on touch models | Dictate and send to Hermes |
 | **Up / Down**, or a drag | Scroll the reply |
-| **Hold Select** | Stop the turn, Prompts, New chat, Chats, Check phone |
+| **Hold Select** | Stop the turn, Prompts (set on the phone), New chat, Chats, Check phone |
 | **Back** | Close Herald |
 
 - **Chats:** each chat opens on its last exchange. The watch keeps the chat it talks in across launches.

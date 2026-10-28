@@ -86,6 +86,8 @@ typedef struct {
   void (*on_chat_item)(const LinkChatItem *item);
   void (*on_status)(const LinkStatus *status);
   void (*on_ring)(const LinkRing *ring);
+  // The prompts to offer, one per line, and their revision.
+  void (*on_prompts)(const char *revision, const char *lines);
   // The ring for [request_id] is over on the phone: answered, declined or rung out there.
   void (*on_ring_end)(const char *request_id);
   // A message to the phone that didn't go, by its type.
@@ -112,7 +114,8 @@ void link_open(LinkHandlers handlers);
 // Each is false when the outbox was busy and nothing went.
 bool link_ask(const char *ask_id, const char *text, const char *chat_id);
 bool link_stop(const char *ask_id);
-bool link_status_request(const char *accent_rev);
+// With the accent and the prompts this has, so the phone sends either only when they changed.
+bool link_status_request(const char *accent_rev, const char *prompts_rev);
 bool link_chats_request(void);
 // [chat_id]'s last exchange, which comes as a finished reply.
 bool link_history_request(const char *chat_id);

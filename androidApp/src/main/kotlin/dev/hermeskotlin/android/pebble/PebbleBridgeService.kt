@@ -77,8 +77,13 @@ class PebbleBridgeService : BasePebbleListenerService() {
             PebbleIncoming.ChatsRequest -> relay.chats(node)
             is PebbleIncoming.StatusRequest -> scope.launch {
                 // Waited for: the watch's first message often starts Herald, and the stored settings are still being read then.
-                val accent = watchAccent(settings.settings.filterNotNull().first().accent)
+                val current = settings.settings.filterNotNull().first()
+                val accent = watchAccent(current.accent)
                 relay.status(node, accent = accent.updateFor(incoming.accentRevision))
+                // Its prompts, once they changed here: the watch keeps them for when the phone is out of reach.
+                if (incoming.promptsRevision != PebbleLink.promptsRevision(current.pebblePrompts)) {
+                    outbox.watch(node).message(PebbleLink.prompts(current.pebblePrompts))
+                }
             }
             is PebbleIncoming.Resync -> outbox.watch(node).resync(incoming.askId)
             is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId) }

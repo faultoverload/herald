@@ -4,7 +4,7 @@
 #define INBOX_SIZE 2048
 #define OUTBOX_SIZE 512
 
-enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_RING = 67, TYPE_RING_END = 68, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70 };
+enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_RING = 67, TYPE_RING_END = 68, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70, TYPE_PROMPTS = 71 };
 
 static LinkHandlers s_handlers;
 
@@ -106,6 +106,12 @@ static void prv_inbox_received(DictionaryIterator *in, void *context) {
     case TYPE_CHAT_ITEM: prv_on_chat_item(in); break;
     case TYPE_REQUEST: prv_on_request(in); break;
     case TYPE_RING: prv_on_ring(in); break;
+    case TYPE_PROMPTS: {
+      const char *rev = prv_text(in, MESSAGE_KEY_PROMPTS_REV);
+      const char *lines = prv_text(in, MESSAGE_KEY_PROMPTS);
+      if (rev && s_handlers.on_prompts) s_handlers.on_prompts(rev, lines ? lines : "");
+      break;
+    }
     case TYPE_RING_END: {
       const char *id = prv_text(in, MESSAGE_KEY_REQUEST_ID);
       if (id && s_handlers.on_ring_end) s_handlers.on_ring_end(id);
@@ -173,10 +179,11 @@ bool link_stop(const char *ask_id) {
   return prv_send();
 }
 
-bool link_status_request(const char *accent_rev) {
+bool link_status_request(const char *accent_rev, const char *prompts_rev) {
   DictionaryIterator *out;
   if (!prv_begin(&out, LINK_STATUS_REQ)) return false;
   if (accent_rev && accent_rev[0]) dict_write_cstring(out, MESSAGE_KEY_ACCENT_REV, accent_rev);
+  if (prompts_rev && prompts_rev[0]) dict_write_cstring(out, MESSAGE_KEY_PROMPTS_REV, prompts_rev);
   return prv_send();
 }
 

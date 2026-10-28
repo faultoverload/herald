@@ -21,6 +21,7 @@ int main(void) {
     .on_request_end = request_end,
     .on_status = talk_on_status,
     .on_ring = talk_on_ring,
+    .on_prompts = talk_on_prompts,
     .on_ring_end = ring_end,
     .on_send_failed = prv_send_failed,
     .on_sent = ring_on_sent,

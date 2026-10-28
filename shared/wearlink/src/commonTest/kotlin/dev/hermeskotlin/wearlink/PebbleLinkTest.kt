@@ -139,6 +139,26 @@ class PebbleLinkTest {
     }
 
     @Test
+    fun promptsGoAsLinesWithARevisionThatChangesWithThem() {
+        val prompts = listOf(" Summarize my day ", "", "What's\nrunning?", "x".repeat(200)) + List(10) { "More $it" }
+        val dict = PebbleLink.prompts(prompts)
+        val lines = (dict[PebbleKeys.PROMPTS] as PebbleValue.Text).value.lines()
+        assertEquals(PebbleLink.MAX_PROMPTS, lines.size)
+        assertEquals("Summarize my day", lines[0])
+        assertEquals("What's running?", lines[1])
+        assertTrue(utf8Size(lines[2]) <= 60)
+        assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES)
+        assertEquals(text(PebbleLink.promptsRevision(prompts)), dict[PebbleKeys.PROMPTS_REV])
+        // Only what the watch would show counts: blanks and spacing don't change the revision, an edit does.
+        assertEquals(PebbleLink.promptsRevision(listOf("A", "B")), PebbleLink.promptsRevision(listOf(" A", "", "B ")))
+        assertTrue(PebbleLink.promptsRevision(listOf("A", "B")) != PebbleLink.promptsRevision(listOf("B", "A")))
+        assertEquals(
+            PebbleIncoming.StatusRequest("rev", "p1"),
+            PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS_REQ), PebbleKeys.ACCENT_REV to text("rev"), PebbleKeys.PROMPTS_REV to text("p1"))),
+        )
+    }
+
+    @Test
     fun everyChatItemFitsTheWatchsInbox() {
         val chat = WatchChat("2".repeat(40), "Ü".repeat(80), 0.0)
         val item = PebbleLink.chats(ChatList(listOf(chat)), 1.0).single()

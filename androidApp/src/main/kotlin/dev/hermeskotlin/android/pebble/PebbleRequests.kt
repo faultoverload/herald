@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Approvals and questions on a Pebble, while answering there is on (Settings → Pebble → Answer on the Pebble).
+ * Approvals and questions on a Pebble, while answering there is on (Settings → Connected devices → Answer on the Pebble).
  * Those in the watch's chat go to the Pebble that asked, as they come, and again when Herald opens there; what's
  * picked or dictated there comes back through [answer]. Off, none are sent, and the watch says to answer on the
  * phone, where they're the usual notifications ([WearRequests]); on, those are posted quietly and on the phone only.

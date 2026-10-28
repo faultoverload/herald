@@ -393,7 +393,7 @@ Each phase ends in something testable on the user's phone and Time 2.
 Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 
 1. **Chats window:** "New chat" plus up to 15 recent chats, with how long ago each was active (`CHATS_REQ`, then `CHAT_ITEM` paging), and the picked chat marked. It opens from the hold-Select menu.
-2. **A setting:** *Settings → Pebble → Answer on the Pebble*, off by default (`AppSettings.pebbleAnswers`). Its text says that answers given on the watch skip the phone's unlock. Off, the watch only says "Waiting for you on your phone", with a double buzz.
+2. **A setting:** *Settings → Connected devices → Answer on the Pebble*, off by default (`AppSettings.pebbleAnswers`). Its text says that answers given on the watch skip the phone's unlock. Off, the watch only says "Waiting for you on your phone", with a double buzz.
 3. **Requests on the watch** (with the setting on):
    - New messages:
      - `REQUEST` (phone → watch): `REQUEST_ID`, `CHAT_ID`, `KIND` (approval or question), `TITLE`, the command or question, and `CHOICES` (newline-joined, the approval choices without "Always", as on the phone's notification).
@@ -440,14 +440,17 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 
 **Results (2026-10-28, Pebble Time 2), all ✅ on the device:**
 
-- (0) Built as the switch only, by choice: *Settings → Pebble → Herald on the Pebble*, on by default (`AppSettings.pebble`), with *Answer on the Pebble* moved into the same section. Off, the phone answers every message from the watch with a status flagged `FLAG_OFF`. The watch then says "Off in Herald" and fails any ask that's still sending. Nothing rings the watch and no requests go to it. The picker for other Pebble apps waits until someone uses one.
+- (0) Built as the switch only, by choice: *Settings → Connected devices → Herald on the Pebble*, on by default (`AppSettings.pebble`), with *Answer on the Pebble* beside it. Connected devices opens from the Phone section, and also says where the Wear OS settings are. Off, the phone answers every message from the watch with a status flagged `FLAG_OFF`. The watch then says "Off in Herald" and fails any ask that's still sending. Nothing rings the watch and no requests go to it. The picker for other Pebble apps waits until someone uses one.
 - (1) A quick launch (`APP_LAUNCH_QUICK_LAUNCH`) opens straight into dictation.
 - (2) On closing, Herald sets its glance:
   - Mid-turn, "Working on it..." for 10 minutes, then "Ask Hermes anything".
   - After a finished turn, the reply's first line, at most 140 bytes and with braces swapped out, since they start template fields.
   - Otherwise, "Ask Hermes anything".
 - (3) Already done in Phase 2: the accent arrives with the status, which carries its revision.
-- (4) The hold-Select menu has *Prompts*: "Summarize my day", "What's running?" and "What needs my attention?". It's hidden while a turn runs.
+- (4) The hold-Select menu has *Prompts*, hidden while a turn runs. They're edited on the phone, in *Settings → Connected devices → Pebble prompts* (`AppSettings.pebblePrompts`), and start as "Summarize my day", "What's running?" and "What needs my attention?".
+  - The watch sends the revision of the prompts it has with each status request (`PROMPTS_REV`). When that's out of date, the phone sends the list back (`PROMPTS`, type 71).
+  - The list is up to six prompts, one per line and each at most 60 bytes, with blank ones left out.
+  - The watch keeps them in persistent storage, so the menu still works with the phone out of reach. With none, the menu has no Prompts entry.
 - (5) On the talk screen, a tap dictates and a vertical drag scrolls, using the SDK's tap and pan recognizers with the system touch bridge turned off for that window. The chat list's `MenuLayer` already scrolls by touch. The ring screen stays buttons-only, so a stray tap can't answer.
 
 ### Phase 5: other models, CI and release

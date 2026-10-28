@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 /**
  * Rings Herald on the Pebbles along with the phone when Hermes calls for an answer, whether or not the gateway talks
  * live: Herald is opened there for it. Answer on the watch shows the approval or question there while answering on
- * the Pebble is on (Settings → Pebble); else the watch only stops ringing and says to answer on the phone,
+ * the Pebble is on (Settings → Connected devices); else the watch only stops ringing and says to answer on the phone,
  * which rings on, and so it does for a call from the agent. Only Pebbles Herald heard from ring: Herald is installed
  * there.
  */

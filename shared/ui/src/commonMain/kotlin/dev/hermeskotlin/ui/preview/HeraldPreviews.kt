@@ -100,6 +100,7 @@ import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
+import dev.hermeskotlin.ui.settings.ConnectedDevicesView
 import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
@@ -145,6 +146,7 @@ enum class PreviewScene(val label: String) {
     BotEditor("Editing a bot"),
     Settings("Settings"),
     StartInstruction("The starting instruction for new chats"),
+    ConnectedDevices("Connected devices: the Pebble and its prompts"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
@@ -576,6 +578,11 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onChange = {},
                     onBack = {},
                 )
+                PreviewScene.ConnectedDevices -> ConnectedDevicesView(
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow, pebbleAnswers = true),
+                    onUpdate = {},
+                    onBack = {},
+                )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
@@ -759,6 +766,10 @@ private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruction)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ConnectedDevicesPreview() = HeraldPreview(PreviewScene.ConnectedDevices)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
