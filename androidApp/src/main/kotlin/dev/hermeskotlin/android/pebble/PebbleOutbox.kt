@@ -2,6 +2,9 @@ package dev.hermeskotlin.android.pebble
 
 import android.content.Context
 import android.util.Log
+import dev.hermeskotlin.android.notify.ChatNotifications
+import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.wear.WatchOutbox
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.PebbleDict
@@ -11,6 +14,7 @@ import dev.hermeskotlin.wearlink.PebbleSent
 import dev.hermeskotlin.wearlink.PebbleValue
 import dev.hermeskotlin.wearlink.PebbleWatch
 import dev.hermeskotlin.wearlink.PhoneStatus
+import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplyUpdate
 import dev.hermeskotlin.wearlink.RingEnd
 import dev.hermeskotlin.wearlink.WatchRing
@@ -22,6 +26,8 @@ import io.rebble.pebblekit2.common.model.PebbleDictionaryItem
 import io.rebble.pebblekit2.common.model.TransmissionResult
 import io.rebble.pebblekit2.common.model.WatchIdentifier
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -29,15 +35,31 @@ import java.util.concurrent.ConcurrentHashMap
  * [WatchOutbox] for Pebbles: what [dev.hermeskotlin.core.wear.WatchRelay] writes for a watch in WearLink's JSON goes
  * to the Pebble as the watchapp's dictionaries ([PebbleLink]), through the Pebble phone app. Each Pebble gets a
  * [PebbleWatch], which streams the reply in pieces and sends nothing while Herald isn't open on the watch.
- * Voice clips never go: a Pebble can't play them, and its asks never ask for them.
+ * Voice clips never go: a Pebble can't play them, and its asks never ask for them. A turn that ends while Herald
+ * isn't open on the watch is told the way a phone's is, as the usual reply notification, which the Pebble app
+ * shows on the watch.
  */
-class PebbleOutbox(private val context: Context, private val scope: CoroutineScope) : WatchOutbox {
+class PebbleOutbox(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val notifications: ChatNotifications,
+    private val settings: SettingsStore,
+) : WatchOutbox {
 
     private val sender by lazy { DefaultPebbleSender(context) }
     private val watches = ConcurrentHashMap<String, PebbleWatch>()
 
     /** The Pebble [node] names, its own sender made the first time. */
-    fun watch(node: String): PebbleWatch = watches.getOrPut(node) { PebbleWatch(scope, { deliver(node, it) }) }
+    fun watch(node: String): PebbleWatch = watches.getOrPut(node) { PebbleWatch(scope, { deliver(node, it) }, onUndelivered = ::notify) }
+
+    private fun notify(update: ReplyUpdate) {
+        val chat = update.chatId ?: return
+        if (!(settings.settings.value ?: AppSettings()).notifyReplies) return
+        val failed = update.phase == ReplyPhase.Failed
+        val text = if (failed) update.error ?: update.text else update.text
+        // Notifications are posted from the main thread, as the notifiers do.
+        scope.launch(Dispatchers.Main) { notifications.postReply(chat, update.title, text, failed) }
+    }
 
     override suspend fun send(node: String, path: String, data: ByteArray): Boolean {
         val watch = watch(node)

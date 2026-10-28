@@ -19,6 +19,7 @@ class PebbleWatchTest {
         val sent = mutableListOf<PebbleDict>()
         var text = ""
         val answers = ArrayDeque<PebbleSent>()
+        val toldElsewhere = mutableListOf<ReplyUpdate>()
 
         fun receive(dict: PebbleDict): PebbleSent {
             sent += dict
@@ -40,7 +41,7 @@ class PebbleWatchTest {
         val fake = FakeWatch()
         val scope = CoroutineScope(coroutineContext + Job())
         try {
-            body(fake, PebbleWatch(scope, { fake.receive(it) }, gapMs = 100, retryMs = 10, finalRetryMs = 1_000))
+            body(fake, PebbleWatch(scope, { fake.receive(it) }, gapMs = 100, retryMs = 10, finalRetryMs = 1_000, onUndelivered = { fake.toldElsewhere += it }))
         } finally {
             scope.cancel()
         }
@@ -209,5 +210,41 @@ class PebbleWatchTest {
         advanceUntilIdle()
         assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), fake.replies.last()[PebbleKeys.PHASE])
         assertEquals("Half an ans", fake.text)
+    }
+
+    @Test
+    fun aTurnThatEndsWhileTheAppIsClosedIsToldElsewhereOnce() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "Working on it"))
+        advanceUntilIdle()
+        watch.closed()
+        watch.reply(update(2, "All done", ReplyPhase.Done))
+        watch.reply(update(3, "All done", ReplyPhase.Done))
+        advanceUntilIdle()
+        assertEquals(listOf("All done"), fake.toldElsewhere.map { it.text })
+    }
+
+    @Test
+    fun aTurnThatEndsJustAsTheAppClosesIsToldElsewhere() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "Working on it"))
+        advanceUntilIdle()
+        fake.answers.addLast(PebbleSent.NotOpen)
+        watch.reply(update(2, "All done", ReplyPhase.Done))
+        advanceUntilIdle()
+        assertEquals(1, fake.toldElsewhere.size)
+    }
+
+    @Test
+    fun aTurnTheWatchSawEndOrStoppedIsntToldElsewhere() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "All done", ReplyPhase.Done))
+        advanceUntilIdle()
+        watch.closed()
+        advanceUntilIdle()
+        watch.opened()
+        watch.reply(update(1, "Half", askId = "p2"))
+        advanceUntilIdle()
+        watch.stopped("p2")
+        watch.closed()
+        advanceUntilIdle()
+        assertEquals(emptyList(), fake.toldElsewhere)
     }
 }

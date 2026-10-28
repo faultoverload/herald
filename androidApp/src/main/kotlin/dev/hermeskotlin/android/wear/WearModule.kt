@@ -15,7 +15,7 @@ import org.koin.dsl.module
  * its request notifications and the accent it follows.
  */
 val wearModule = module {
-    single { PebbleOutbox(androidContext(), get()) }
+    single { PebbleOutbox(androidContext(), get(), get(), get()) }
     single<WatchOutbox> { RoutingOutbox(PhoneOutbox(androidContext()), get()) }
     single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get(), get()) }

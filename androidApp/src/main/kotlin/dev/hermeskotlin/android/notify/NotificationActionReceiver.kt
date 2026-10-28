@@ -84,7 +84,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (text.isNullOrEmpty()) return
                 // Clears the inline reply's spinner; a failure posts in its place.
                 notifications.cancelReply(storedId)
-                if (session == null || session.state.value.storedSessionId != storedId) {
+                // The open chat's, else the watch's chat's (a Pebble's reply notification is for it).
+                val chat = listOfNotNull(session, relay.session.value).firstOrNull { it.state.value.storedSessionId == storedId }
+                if (chat == null) {
                     // A chat followed without being open takes the reply straight to its live session.
                     if (storedId !in watcher.chats.value) {
                         notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
@@ -99,9 +101,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
                 awaitConnection()
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
-                val sent = scope.async { session.send(text) }
+                val sent = scope.async { chat.send(text) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, session.state.value.error ?: "Open Herald to send it again.")
+                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, chat.state.value.error ?: "Open Herald to send it again.")
                 }
             }
         }

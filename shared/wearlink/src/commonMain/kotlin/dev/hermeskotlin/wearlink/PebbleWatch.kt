@@ -30,6 +30,9 @@ enum class PebbleSent {
  *   goes again from the start, so a watch reopened mid-turn catches up.
  * - The turn's last update is tried again a few times, [finalRetryMs] apart, when it's lost: nothing comes after it
  *   to carry it, and the watch would show the turn running until it reopened.
+ * - A turn that ends while the app is closed goes to [onUndelivered], once, for the phone to tell some other way;
+ *   not one the watch stopped, which it knows ended.
+
  *
  * Every call only queues; one coroutine in [scope] does the sending, so nothing here is shared between threads.
  */
@@ -39,6 +42,7 @@ class PebbleWatch(
     private val gapMs: Long = REPLY_GAP_MS,
     private val retryMs: Long = RETRY_MS,
     private val finalRetryMs: Long = FINAL_RETRY_MS,
+    private val onUndelivered: (ReplyUpdate) -> Unit = {},
 ) {
     private sealed interface Event {
         data class Reply(val update: ReplyUpdate) : Event
@@ -88,6 +92,10 @@ class PebbleWatch(
     /** How often the turn's last update was tried again after it was lost. */
     private var finalRounds = 0
 
+    /** The asks whose end went to [onUndelivered] or that the watch stopped: neither is told again. */
+    private var toldElsewhere: String? = null
+    private var stoppedAsk: String? = null
+
     /** The ask the watch has, the part of its plain text the watch acknowledged, and the rest of the update it shows. */
     private var shownAsk: String? = null
     private var shownText = ""
@@ -109,6 +117,7 @@ class PebbleWatch(
                 val last = latest
                 // The newest wins; one that arrives late for the same ask would undo it.
                 if (last == null || last.askId != event.update.askId || event.update.seq >= last.seq) latest = event.update
+                if (!open) endedWhileClosed()
             }
             is Event.Message -> if (open) queue.addLast(event.dict)
             Event.Opened -> {
@@ -118,11 +127,25 @@ class PebbleWatch(
             Event.Closed -> {
                 open = false
                 queue.clear()
+                endedWhileClosed()
             }
             is Event.Resync -> if (event.askId == shownAsk) forgetShown()
-            is Event.Stopped -> latest = latest?.takeIf { it.askId == event.askId && it.phase != ReplyPhase.Failed }
-                ?.copy(phase = ReplyPhase.Done, activity = null) ?: latest
+            is Event.Stopped -> {
+                stoppedAsk = event.askId
+                latest = latest?.takeIf { it.askId == event.askId && it.phase != ReplyPhase.Failed }
+                    ?.copy(phase = ReplyPhase.Done, activity = null) ?: latest
+            }
         }
+    }
+
+    /** The newest turn ended and the watch, closed, hasn't seen it end: told elsewhere, once. */
+    private fun endedWhileClosed() {
+        val update = latest ?: return
+        if (update.phase != ReplyPhase.Done && update.phase != ReplyPhase.Failed) return
+        if (update.askId == toldElsewhere || update.askId == stoppedAsk) return
+        if (shownAsk == update.askId && shownState?.phase == update.phase) return
+        toldElsewhere = update.askId
+        onUndelivered(update)
     }
 
     private fun forgetShown() {
@@ -188,6 +211,7 @@ class PebbleWatch(
                 PebbleSent.NotOpen -> {
                     open = false
                     queue.clear()
+                    endedWhileClosed()
                     return false
                 }
                 PebbleSent.Failed -> if (attempt < ATTEMPTS - 1) delay(retryMs)
