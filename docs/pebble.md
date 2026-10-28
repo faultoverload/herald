@@ -451,6 +451,7 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
   - The watch sends the revision of the prompts it has with each status request (`PROMPTS_REV`). When that's out of date, the phone sends the list back (`PROMPTS`, type 71).
   - The list is up to six prompts, one per line and each at most 60 bytes, with blank ones left out.
   - The watch keeps them in persistent storage, so the menu still works with the phone out of reach. With none, the menu has no Prompts entry.
+  - Tested on the Time 2: a prompt edited in Herald Dev showed up in the watch's menu and stayed there after Herald was reopened.
 - (5) On the talk screen, a tap dictates and a vertical drag scrolls, using the SDK's tap and pan recognizers with the system touch bridge turned off for that window. The chat list's `MenuLayer` already scrolls by touch. The ring screen stays buttons-only, so a stray tap can't answer.
 
 ### Phase 5: other models, CI and release
