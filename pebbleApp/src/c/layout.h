@@ -5,7 +5,7 @@
 
 #include <pebble.h>
 
-#define LAYOUT_HEADER_H PBL_IF_ROUND_ELSE(40, 30)
+#define LAYOUT_HEADER_H PBL_IF_ROUND_ELSE(46, 30)
 #define LAYOUT_ALIGN PBL_IF_ROUND_ELSE(GTextAlignmentCenter, GTextAlignmentLeft)
 
 // How far in from each side the row from [top] to [top + height] of [screen] starts: [pad], and on a round screen

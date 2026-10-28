@@ -32,7 +32,7 @@ void layout_draw_header(GContext *ctx, GRect bounds, const char *title, GColor f
   graphics_context_set_text_color(ctx, on_fill);
   int top = bounds.size.h - 26;
   // At the top of the screen and as wide: a round screen is as tall as it's wide.
-  int inset = layout_inset(GRect(0, 0, bounds.size.w, bounds.size.w), top, 22, 6);
+  int inset = layout_inset(GRect(0, 0, bounds.size.w, bounds.size.w), top, 22, PBL_IF_ROUND_ELSE(2, 6));
   graphics_draw_text(ctx, title, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
                      GRect(inset, top, bounds.size.w - inset * 2 - PBL_IF_ROUND_ELSE(0, right_room), 22),
                      GTextOverflowModeTrailingEllipsis, LAYOUT_ALIGN, NULL);
