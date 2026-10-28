@@ -51,8 +51,26 @@ typedef struct {
   const char *error;  // NULL for none
 } LinkChatItem;
 
+// How a request is answered on the watch.
+typedef enum { ANSWER_ON_PHONE, ANSWER_CHOICES, ANSWER_CHOICES_OR_TEXT } Answering;
+
+// An approval or a question waiting in a chat; [choices] one per line.
+typedef struct {
+  const char *request_id;
+  const char *chat_id;  // NULL when unknown
+  const char *title;    // the chat's, NULL when unknown
+  bool approval;
+  const char *heading;
+  const char *detail;
+  const char *choices;
+  Answering answering;
+} LinkRequest;
+
 typedef struct {
   void (*on_reply)(const LinkReply *reply);
+  void (*on_request)(const LinkRequest *request);
+  // Over: answered (here or elsewhere), or [error] (else NULL) says why the watch's answer didn't go.
+  void (*on_request_end)(const char *request_id, const char *error);
   void (*on_chat_item)(const LinkChatItem *item);
   void (*on_status)(const LinkStatus *status);
   // A message to the phone that didn't go, by its type.
@@ -66,6 +84,7 @@ enum {
   LINK_STATUS_REQ = 4,
   LINK_RESYNC = 7,
   LINK_HISTORY_REQ = 8,
+  LINK_ANSWER = 9,
 };
 
 // Opens AppMessage with the inbox the phone's messages are sized for.
@@ -79,6 +98,8 @@ bool link_chats_request(void);
 // [chat_id]'s last exchange, which comes as a finished reply.
 bool link_history_request(const char *chat_id);
 bool link_resync(const char *ask_id);
+// Choice [index] of those shown, or (index -1) [text] dictated.
+bool link_answer(const char *request_id, int index, const char *text);
 
 // Whether the Pebble phone app is connected at all.
 bool link_phone_connected(void);

@@ -1,5 +1,7 @@
 #include "talk.h"
 #include "chats.h"
+#include "request.h"
+#include "dictate.h"
 
 // PebbleLink.MAX_REPLY_BYTES: the phone never sends more.
 #define MAX_REPLY 6000
@@ -34,7 +36,6 @@ static TextLayer *s_activity_layer;
 static ScrollLayer *s_scroll_layer;
 static TextLayer *s_said_layer;
 static TextLayer *s_reply_layer;
-static DictationSession *s_dictation;
 static AppTimer *s_answer_timer;
 static AppTimer *s_status_timer;
 
@@ -317,6 +318,10 @@ void talk_on_reply(const LinkReply *reply) {
   prv_redraw();
 }
 
+void talk_on_request(const LinkRequest *request) {
+  request_show(request, s_fill, s_on_fill);
+}
+
 // Talks in [chat_id] from the next ask on; an empty id is a new chat.
 static void prv_use_chat(const char *chat_id, const char *title) {
   prv_copy(s_chat_id, sizeof(s_chat_id), chat_id);
@@ -339,8 +344,8 @@ static void prv_use_chat(const char *chat_id, const char *title) {
 
 // --- Buttons
 
-static void prv_dictated(DictationSession *session, DictationSessionStatus status, char *transcription, void *context) {
-  if (status == DictationSessionStatusSuccess) prv_ask(transcription);
+static void prv_dictated(const char *text) {
+  prv_ask(text);
 }
 
 static void prv_select(ClickRecognizerRef recognizer, void *context) {
@@ -350,7 +355,7 @@ static void prv_select(ClickRecognizerRef recognizer, void *context) {
     prv_redraw();
     return;
   }
-  if (s_dictation) dictation_session_start(s_dictation);
+  dictate(prv_dictated);
 }
 
 static void prv_menu_new_chat(ActionMenu *menu, const ActionMenuItem *item, void *context) {
@@ -458,7 +463,6 @@ void talk_init(void) {
     s_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_FILL)), GColorBlack);
     s_on_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_ON_FILL)), GColorWhite);
   }
-  s_dictation = dictation_session_create(sizeof(s_said), prv_dictated, NULL);
   connection_service_subscribe((ConnectionHandlers) { .pebble_app_connection_handler = prv_phone_connection });
 
   s_window = window_create();
@@ -473,7 +477,7 @@ void talk_init(void) {
 
 void talk_deinit(void) {
   connection_service_unsubscribe();
-  if (s_dictation) dictation_session_destroy(s_dictation);
+  dictate_deinit();
   window_destroy(s_window);
   s_window = NULL;
 }

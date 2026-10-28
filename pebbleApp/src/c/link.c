@@ -4,7 +4,7 @@
 #define INBOX_SIZE 2048
 #define OUTBOX_SIZE 512
 
-enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66 };
+enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70 };
 
 static LinkHandlers s_handlers;
 
@@ -66,11 +66,35 @@ static void prv_on_chat_item(DictionaryIterator *in) {
   if (s_handlers.on_chat_item) s_handlers.on_chat_item(&item);
 }
 
+static void prv_on_request(DictionaryIterator *in) {
+  const char *choices = prv_text(in, MESSAGE_KEY_CHOICES);
+  const char *detail = prv_text(in, MESSAGE_KEY_DETAIL);
+  const char *heading = prv_text(in, MESSAGE_KEY_ACTIVITY);
+  LinkRequest request = {
+    .request_id = prv_text(in, MESSAGE_KEY_REQUEST_ID),
+    .chat_id = prv_text(in, MESSAGE_KEY_CHAT_ID),
+    .title = prv_text(in, MESSAGE_KEY_TITLE),
+    .approval = prv_int(dict_find(in, MESSAGE_KEY_APPROVAL)) == 1,
+    .heading = heading ? heading : "",
+    .detail = detail ? detail : "",
+    .choices = choices ? choices : "",
+    .answering = (Answering)prv_int(dict_find(in, MESSAGE_KEY_ANSWERING)),
+  };
+  if (!request.request_id || request.answering > ANSWER_CHOICES_OR_TEXT) return;
+  if (s_handlers.on_request) s_handlers.on_request(&request);
+}
+
 static void prv_inbox_received(DictionaryIterator *in, void *context) {
   switch (prv_int(dict_find(in, MESSAGE_KEY_TYPE))) {
     case TYPE_REPLY: prv_on_reply(in); break;
     case TYPE_STATUS: prv_on_status(in); break;
     case TYPE_CHAT_ITEM: prv_on_chat_item(in); break;
+    case TYPE_REQUEST: prv_on_request(in); break;
+    case TYPE_REQUEST_END: {
+      const char *id = prv_text(in, MESSAGE_KEY_REQUEST_ID);
+      if (id && s_handlers.on_request_end) s_handlers.on_request_end(id, prv_text(in, MESSAGE_KEY_ERROR));
+      break;
+    }
     default: break;
   }
 }
@@ -147,6 +171,15 @@ bool link_resync(const char *ask_id) {
   DictionaryIterator *out;
   if (!prv_begin(&out, LINK_RESYNC)) return false;
   dict_write_cstring(out, MESSAGE_KEY_ASK_ID, ask_id);
+  return prv_send();
+}
+
+bool link_answer(const char *request_id, int index, const char *text) {
+  DictionaryIterator *out;
+  if (!prv_begin(&out, LINK_ANSWER)) return false;
+  dict_write_cstring(out, MESSAGE_KEY_REQUEST_ID, request_id);
+  dict_write_int32(out, MESSAGE_KEY_INDEX, index);
+  if (text) dict_write_cstring(out, MESSAGE_KEY_TEXT, text);
   return prv_send();
 }
 

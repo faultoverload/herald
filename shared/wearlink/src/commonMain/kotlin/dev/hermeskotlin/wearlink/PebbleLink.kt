@@ -46,6 +46,12 @@ object PebbleKeys {
     const val VERSION = 25
     /** What was said for the turn on screen, when the watch didn't say it itself (a chat's last exchange). */
     const val SAID = 26
+    /** A request's command or question. */
+    const val DETAIL = 27
+    /** A request's choices, one per line. */
+    const val CHOICES = 28
+    /** How the watch answers a request: 0 on the phone only, 1 by a choice, 2 by a choice or dictating. */
+    const val ANSWERING = 29
 
     /** Every key by its name in package.json. */
     val byName: Map<String, Int> = mapOf(
@@ -55,6 +61,7 @@ object PebbleKeys {
         "ACCENT_REV" to ACCENT_REV, "ACCENT_FILL" to ACCENT_FILL, "ACCENT_TEXT" to ACCENT_TEXT,
         "ACCENT_ON_FILL" to ACCENT_ON_FILL, "ACCENT_DIM" to ACCENT_DIM, "REQUEST_ID" to REQUEST_ID,
         "APPROVAL" to APPROVAL, "AGENT" to AGENT, "ANSWERED" to ANSWERED, "VERSION" to VERSION, "SAID" to SAID,
+        "DETAIL" to DETAIL, "CHOICES" to CHOICES, "ANSWERING" to ANSWERING,
     )
 }
 
@@ -72,6 +79,8 @@ object PebbleTypes {
     const val RESYNC = 7
     /** [PebbleKeys.CHAT_ID]'s last exchange, for the watch opening that chat: it comes as a finished [REPLY]. */
     const val HISTORY_REQ = 8
+    /** The answer to request [PebbleKeys.REQUEST_ID]: choice [PebbleKeys.INDEX] of those shown, else [PebbleKeys.TEXT] dictated. */
+    const val ANSWER = 9
 
     const val REPLY = 64
     /** One of the recent chats, [PebbleKeys.INDEX] of [PebbleKeys.COUNT]; a count of 0 is an empty list or its [PebbleKeys.ERROR]. */
@@ -79,6 +88,10 @@ object PebbleTypes {
     const val STATUS = 66
     const val RING = 67
     const val RING_END = 68
+    /** An approval or a question to answer on the watch (answering on the Pebble is on). */
+    const val REQUEST = 69
+    /** Request [PebbleKeys.REQUEST_ID] is over: answered (here or elsewhere), or the watch's answer failed with [PebbleKeys.ERROR]. */
+    const val REQUEST_END = 70
 }
 
 /** What the watch sent, read from its dictionary. */
@@ -91,6 +104,8 @@ sealed interface PebbleIncoming {
     data class RingEnd(val requestId: String, val answered: Boolean) : PebbleIncoming
     data class Resync(val askId: String) : PebbleIncoming
     data class HistoryRequest(val chatId: String) : PebbleIncoming
+    /** [index] of the choices shown, or null with the [text] dictated. */
+    data class Answer(val requestId: String, val index: Int?, val text: String?) : PebbleIncoming
 }
 
 object PebbleLink {
@@ -116,6 +131,10 @@ object PebbleLink {
     private const val MAX_ACTIVITY_BYTES = 60
     private const val MAX_ERROR_BYTES = 120
     private const val MAX_SAID_BYTES = 200
+    private const val MAX_DETAIL_BYTES = 700
+    private const val MAX_CHOICE_BYTES = 60
+    /** Hermes offers up to 4 choices to a question; an approval 3. */
+    const val MAX_CHOICES = 6
 
     /** [dict]'s size on the watch, as `dict_calc_buffer_size` counts it: a 7-byte header per value, text with its NUL. */
     fun size(dict: PebbleDict): Int = 1 + dict.values.sumOf {
@@ -141,6 +160,11 @@ object PebbleLink {
             PebbleTypes.RING_ON -> PebbleIncoming.RingOn(text(PebbleKeys.REQUEST_ID) ?: return null)
             PebbleTypes.RING_END_FROM_WATCH -> PebbleIncoming.RingEnd(text(PebbleKeys.REQUEST_ID) ?: return null, num(PebbleKeys.ANSWERED) == 1)
             PebbleTypes.RESYNC -> PebbleIncoming.Resync(text(PebbleKeys.ASK_ID) ?: return null)
+            PebbleTypes.ANSWER -> PebbleIncoming.Answer(
+                requestId = text(PebbleKeys.REQUEST_ID) ?: return null,
+                index = num(PebbleKeys.INDEX)?.takeIf { it >= 0 },
+                text = text(PebbleKeys.TEXT)?.takeIf { it.isNotBlank() },
+            )
             PebbleTypes.HISTORY_REQ -> PebbleIncoming.HistoryRequest(text(PebbleKeys.CHAT_ID)?.takeIf { it.isNotEmpty() } ?: return null)
             else -> null
         }
@@ -226,6 +250,39 @@ object PebbleLink {
         PebbleKeys.APPROVAL to num(if (ring.approval) 1 else 0),
         PebbleKeys.AGENT to num(if (ring.agent) 1 else 0),
     )
+
+    /**
+     * An approval ([approval]) or a question waiting in chat [chatId] ([title]): its [detail], the [choices] the watch
+     * offers, and how it's answered there ([answering], see [PebbleKeys.ANSWERING]).
+     */
+    fun request(
+        requestId: String,
+        chatId: String?,
+        title: String?,
+        approval: Boolean,
+        heading: String,
+        detail: String,
+        choices: List<String>,
+        answering: Int,
+    ): PebbleDict = buildMap {
+        put(PebbleKeys.TYPE, num(PebbleTypes.REQUEST))
+        put(PebbleKeys.REQUEST_ID, text(requestId))
+        chatId?.let { put(PebbleKeys.CHAT_ID, text(it)) }
+        title?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.TITLE, text(clipUtf8(it, MAX_TITLE_BYTES))) }
+        put(PebbleKeys.APPROVAL, num(if (approval) 1 else 0))
+        put(PebbleKeys.ACTIVITY, text(clipUtf8(heading, MAX_ACTIVITY_BYTES)))
+        put(PebbleKeys.DETAIL, text(clipUtf8(plainText(detail), MAX_DETAIL_BYTES)))
+        // Each on a line of its own: the watch splits them there.
+        val lines = choices.take(MAX_CHOICES).map { clipUtf8(it.replace('\n', ' '), MAX_CHOICE_BYTES) }
+        put(PebbleKeys.CHOICES, text(lines.joinToString("\n")))
+        put(PebbleKeys.ANSWERING, num(answering))
+    }
+
+    fun requestEnd(requestId: String, error: String? = null): PebbleDict = buildMap {
+        put(PebbleKeys.TYPE, num(PebbleTypes.REQUEST_END))
+        put(PebbleKeys.REQUEST_ID, text(requestId))
+        error?.let { put(PebbleKeys.ERROR, text(clipUtf8(it, MAX_ERROR_BYTES))) }
+    }
 
     fun ringEnd(end: RingEnd): PebbleDict = mapOf(
         PebbleKeys.TYPE to num(PebbleTypes.RING_END),

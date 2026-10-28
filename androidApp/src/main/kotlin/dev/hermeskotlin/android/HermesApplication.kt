@@ -10,6 +10,7 @@ import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.phone.Geofences
 import dev.hermeskotlin.android.push.PushListener
 import dev.hermeskotlin.android.pebble.PebbleApps
+import dev.hermeskotlin.android.pebble.PebbleRequests
 import dev.hermeskotlin.android.wear.WatchAccentSync
 import dev.hermeskotlin.android.wear.WatchRinger
 import dev.hermeskotlin.android.wear.WearRequests
@@ -41,6 +42,7 @@ class HermesApplication : Application() {
         // Before anything the Pebble app hands over is read: only the picked Pebble app is heard.
         PebbleApps.choose(this, koin.get())
         koin.get<WearRequests>().start()
+        koin.get<PebbleRequests>().start()
         koin.get<WatchRinger>().start()
         koin.get<WatchAccentSync>().start()
         koin.get<ChatNotifier>().start()

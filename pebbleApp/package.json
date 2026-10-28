@@ -37,7 +37,10 @@
       "AGENT": 23,
       "ANSWERED": 24,
       "VERSION": 25,
-      "SAID": 26
+      "SAID": 26,
+      "DETAIL": 27,
+      "CHOICES": 28,
+      "ANSWERING": 29
     },
     "companionApp": {
       "android": {

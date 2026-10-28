@@ -99,6 +99,7 @@ import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sun
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.WrapText
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
@@ -578,6 +579,15 @@ internal fun SettingsView(
                         checked = settings.notifyRequests,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyRequests = on) } },
                         icon = Lucide.ShieldAlert,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Answer on the Pebble",
+                        detail = "Approvals and questions can be answered on Herald's Pebble app, which doesn't ask for " +
+                            "this phone's unlock: anyone wearing the watch can answer them.",
+                        checked = settings.pebbleAnswers,
+                        onCheckedChange = { on -> onUpdate { it.copy(pebbleAnswers = on) } },
+                        icon = Lucide.Watch,
                     )
                     Divider()
                     SwitchRow(

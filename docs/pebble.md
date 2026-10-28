@@ -393,7 +393,7 @@ Each phase ends in something testable on the user's phone and Time 2.
 Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 
 1. **Chats window:** "New chat" plus up to 15 recent chats, with how long ago each was active (`CHATS_REQ`, then `CHAT_ITEM` paging), and the picked chat marked. It opens from the hold-Select menu.
-2. **A setting:** *Settings → Watch → Answer on the Pebble*, off by default (`AppSettings.pebbleAnswers`). Its text says that answers given on the watch skip the phone's unlock. Off, the watch only says "Waiting for you on your phone", with a double buzz.
+2. **A setting:** *Settings → Notifications → Answer on the Pebble*, off by default (`AppSettings.pebbleAnswers`). Its text says that answers given on the watch skip the phone's unlock. Off, the watch only says "Waiting for you on your phone", with a double buzz.
 3. **Requests on the watch** (with the setting on):
    - New messages:
      - `REQUEST` (phone → watch): `REQUEST_ID`, `CHAT_ID`, `KIND` (approval or question), `TITLE`, the command or question, and `CHOICES` (newline-joined, the approval choices without "Always", as on the phone's notification).
@@ -410,6 +410,18 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 5. **Closed-app delivery:** when the turn's `Done` gets `NotOpen`, Herald posts its usual reply notification for that chat, which the Pebble app mirrors. Its Reply action works with the Pebble app's *showsUserInterface* setting on, and by default once [#1](https://github.com/faultoverload/herald/issues/1) is fixed.
 
 *Exit:* the full talk → question or approval → reply loop on the device, with the setting on and off, and with the app open and closed.
+
+**Results so far (2026-10-27, Pebble Time 2, Pixel 9a):**
+
+- ✅ Chats (1): the list, picking a chat, and each chat opening on its last exchange (`HISTORY_REQ`).
+- ✅ Closed-app delivery (5): a turn that ends while the watchapp is closed posts the reply notification, and its Reply works. This needs Herald's notification permission.
+- ✅ Setting and requests (2, 3), with a clarify question:
+  - With the setting on, the question shows only in the watchapp. Herald still posts it on the phone, but silently and phone-only (`setLocalOnly`), so the Pebble app doesn't mirror it on top of the watchapp's prompt (`WearRequests.shownOnWatch`).
+  - Both a picked choice and a dictated answer reach Hermes.
+  - Bugs found on the device:
+    - An `ActionMenu` callback's `context` is the menu's, not the item's, so every pick sent the first choice. Fixed: the choice index now comes from `action_menu_item_get_action_data`.
+    - With a dictation session per screen, the question's dictated answer went to the talk screen and was sent as a new message. Fixed: the app now has one session (`dictate.c`), whose result goes to the screen that started it.
+  - Approvals were checked only in unit tests and on the emulator. The test gateway has approvals off.
 
 ### Phase 4: glanceables and polish
 

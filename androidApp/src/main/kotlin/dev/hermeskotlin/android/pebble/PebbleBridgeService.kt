@@ -38,6 +38,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
 
     private val relay: WatchRelay by inject()
     private val outbox: PebbleOutbox by inject()
+    private val requests: PebbleRequests by inject()
     private val notifier: ChatNotifier by inject()
     private val settings: SettingsStore by inject()
     private val scope: CoroutineScope by inject()
@@ -57,6 +58,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
         Log.d(TAG, "From the Pebble: type ${dict[PebbleKeys.TYPE]}")
         when (incoming) {
             is PebbleIncoming.Ask -> {
+                requests.askedFrom(node)
                 relay.ask(node, incoming.toWatchAsk())
                 // Started now, while the message is being delivered: the turn may outlast the watchapp's binding.
                 notifier.startServiceNow()
@@ -73,6 +75,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
             }
             is PebbleIncoming.Resync -> outbox.watch(node).resync(incoming.askId)
             is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId) }
+            is PebbleIncoming.Answer -> requests.answer(node, incoming)
             // Rings come with the watchapp's ring screen.
             is PebbleIncoming.RingOn, is PebbleIncoming.RingEnd -> Unit
         }
@@ -99,7 +102,10 @@ class PebbleBridgeService : BasePebbleListenerService() {
         ReplyUpdate(PebbleLink.historyAskId(chatId), ReplyPhase.Failed, chatId = chatId, error = error)
 
     override fun onAppOpened(watchappUUID: UUID, watch: WatchIdentifier) {
-        if (watchappUUID == PebbleOutbox.APP_UUID) outbox.watch(PebbleOutbox.nodeOf(watch)).opened()
+        if (watchappUUID != PebbleOutbox.APP_UUID) return
+        val node = PebbleOutbox.nodeOf(watch)
+        outbox.watch(node).opened()
+        requests.reopened(node)
     }
 
     override fun onAppClosed(watchappUUID: UUID, watch: WatchIdentifier) {

@@ -141,6 +141,11 @@ data class AppSettings(
      */
     val watchRings: Boolean = true,
     /**
+     * Approvals and questions can be answered on a Pebble, as they come or when it rings. Off by default: a watch's
+     * answer doesn't ask for the phone's unlock. Off, the Pebble says to answer on the phone.
+     */
+    val pebbleAnswers: Boolean = false,
+    /**
      * Nothing rings from [quietFrom] to [quietUntil], minutes into the day on this phone's clock: the agent's calls
      * don't get through, and an approval or a question is the usual notification (see `quietNow`).
      */

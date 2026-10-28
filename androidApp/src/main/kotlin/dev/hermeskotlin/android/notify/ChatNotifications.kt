@@ -21,8 +21,9 @@ import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
-import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.choicesAway
+import dev.hermeskotlin.core.chat.label
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.phone.AgentCall
 import dev.hermeskotlin.core.phone.CallOpeners
@@ -234,7 +235,7 @@ class ChatNotifications(
                     .setContentText(request.command.ifBlank { request.description })
                     .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 // "Always" is too big a decision for a notification; it stays in the app.
-                request.choices.filter { it != ApprovalChoice.Always }.forEach { choice ->
+                request.choicesAway.forEach { choice ->
                     builder.addAction(
                         NotificationCompat.Action.Builder(
                             0,
@@ -803,13 +804,6 @@ class ChatNotifications(
     }
 }
 
-private val ApprovalChoice.label: String
-    get() = when (this) {
-        ApprovalChoice.Once -> "Allow once"
-        ApprovalChoice.Session -> "Allow for chat"
-        ApprovalChoice.Always -> "Always allow"
-        ApprovalChoice.Deny -> "Deny"
-    }
 
 /** Markdown reads badly in the shade; keep the words, drop the markup. */
 internal fun String.toPlainText(): String = this

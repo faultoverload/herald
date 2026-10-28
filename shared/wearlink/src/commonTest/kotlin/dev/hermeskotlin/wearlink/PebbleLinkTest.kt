@@ -99,6 +99,34 @@ class PebbleLinkTest {
     }
 
     @Test
+    fun aRequestAtItsLongestFitsTheWatchsInboxAndItsAnswerReads() {
+        val long = "Ü".repeat(2_000)
+        val dict = PebbleLink.request(
+            requestId = "r".repeat(40),
+            chatId = "20261027_044722_e4d150",
+            title = long,
+            approval = true,
+            heading = long,
+            detail = long,
+            choices = List(10) { long },
+            answering = 2,
+        )
+        assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES, "size ${PebbleLink.size(dict)}")
+        assertEquals(PebbleLink.MAX_CHOICES, (dict[PebbleKeys.CHOICES] as PebbleValue.Text).value.lines().size)
+
+        assertEquals(
+            PebbleIncoming.Answer("r1", 2, null),
+            PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.ANSWER), PebbleKeys.REQUEST_ID to text("r1"), PebbleKeys.INDEX to num(2))),
+        )
+        assertEquals(
+            PebbleIncoming.Answer("r1", null, "Blue"),
+            PebbleLink.decode(
+                mapOf(PebbleKeys.TYPE to num(PebbleTypes.ANSWER), PebbleKeys.REQUEST_ID to text("r1"), PebbleKeys.INDEX to num(-1), PebbleKeys.TEXT to text("Blue")),
+            ),
+        )
+    }
+
+    @Test
     fun everyChatItemFitsTheWatchsInbox() {
         val chat = WatchChat("2".repeat(40), "Ü".repeat(80), 0.0)
         val item = PebbleLink.chats(ChatList(listOf(chat)), 1.0).single()
