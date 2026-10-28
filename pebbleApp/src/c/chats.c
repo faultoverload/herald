@@ -1,4 +1,5 @@
 #include "chats.h"
+#include "layout.h"
 
 // RelayChats' CHAT_LIST_SIZE: the phone sends no more.
 #define MAX_CHATS 15
@@ -43,8 +44,8 @@ static void prv_draw_row(GContext *ctx, const Layer *cell, MenuIndex *index, voi
   if (s_error[0] || s_count == 0) {
     GRect bounds = layer_get_bounds(cell);
     graphics_draw_text(ctx, s_error[0] ? s_error : "No chats yet.", fonts_get_system_font(FONT_KEY_GOTHIC_18),
-                       GRect(6, 0, bounds.size.w - 12, bounds.size.h), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
+                       GRect(PBL_IF_ROUND_ELSE(18, 6), 0, bounds.size.w - PBL_IF_ROUND_ELSE(36, 12), bounds.size.h),
+                       GTextOverflowModeTrailingEllipsis, LAYOUT_ALIGN, NULL);
     return;
   }
   const Chat *chat = &s_chats[index->row - 1];

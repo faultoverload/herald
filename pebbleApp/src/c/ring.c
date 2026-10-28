@@ -1,4 +1,5 @@
 #include "ring.h"
+#include "layout.h"
 
 // ChatNotifications.RING_MS: the phone rings no longer.
 #define RING_MS 45000
@@ -8,7 +9,11 @@
 #define RETRIES 10
 #define VOLUME 70
 #define PAD 6
-#define HEADER_H 30
+#define HEADER_H LAYOUT_HEADER_H
+// Room the button labels take at the right.
+#define LABELS_W 66
+// Narrower than this (a 144-wide screen), the ring stacks its lines.
+#define SMALL_W 180
 
 static Window *s_window;
 static Layer *s_header_layer;
@@ -49,7 +54,8 @@ static void prv_copy(char *to, size_t size, const char *from) {
 
 static const uint32_t s_buzz[] = { 500, 250, 500 };
 
-// A phone's ring: two notes back and forth, twice.
+#ifdef _PBL_API_EXISTS_speaker_play_notes
+// A phone's ring: two notes back and forth, twice. Only where there's a speaker; elsewhere it buzzes alone.
 static const SpeakerNote s_tone[] = {
   { .midi_note = 79, .waveform = SpeakerWaveformSine, .duration_ms = 70 },
   { .midi_note = 76, .waveform = SpeakerWaveformSine, .duration_ms = 70 },
@@ -65,12 +71,15 @@ static const SpeakerNote s_tone[] = {
   { .midi_note = 79, .waveform = SpeakerWaveformSine, .duration_ms = 70 },
   { .midi_note = 76, .waveform = SpeakerWaveformSine, .duration_ms = 70 },
 };
+#endif
 
 static void prv_buzz(void *data) {
   s_buzz_timer = app_timer_register(BUZZ_EVERY_MS, prv_buzz, NULL);
   vibes_enqueue_custom_pattern((VibePattern) { .durations = s_buzz, .num_segments = ARRAY_LENGTH(s_buzz) });
+#ifdef _PBL_API_EXISTS_speaker_play_notes
   // Muted (always, or in Quiet Time): it only buzzes.
   if (!speaker_is_muted()) speaker_play_notes(s_tone, ARRAY_LENGTH(s_tone), VOLUME);
+#endif
 }
 
 static void prv_stop_ringing(void) {
@@ -79,7 +88,9 @@ static void prv_stop_ringing(void) {
   if (s_ring_out_timer) app_timer_cancel(s_ring_out_timer);
   s_ring_out_timer = NULL;
   vibes_cancel();
+#ifdef _PBL_API_EXISTS_speaker_play_notes
   speaker_stop();
+#endif
 }
 
 // --- Telling the phone
@@ -144,13 +155,7 @@ void ring_on_sent(int type) {
 // --- The window
 
 static void prv_header_update(Layer *layer, GContext *ctx) {
-  GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, s_fill);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-  graphics_context_set_text_color(ctx, s_on_fill);
-  graphics_draw_text(ctx, "Hermes is calling", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                     GRect(PAD, 2, bounds.size.w - PAD * 2, HEADER_H - 4), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentLeft, NULL);
+  layout_draw_header(ctx, layer_get_bounds(layer), "Hermes is calling", s_fill, s_on_fill, 0);
 }
 
 static void prv_redraw(void) {
@@ -218,20 +223,49 @@ static TextLayer *prv_text_layer(Layer *root, GRect frame, const char *font, GTe
 static void prv_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
-  int w = bounds.size.w - PAD * 2;
   window_set_background_color(window, GColorWhite);
 
   s_header_layer = layer_create(GRect(0, 0, bounds.size.w, HEADER_H));
   layer_set_update_proc(s_header_layer, prv_header_update);
   layer_add_child(root, s_header_layer);
 
-  s_title_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 6, w, 64), FONT_KEY_GOTHIC_28_BOLD, GTextAlignmentLeft);
-  s_why_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 70, w, 56), FONT_KEY_GOTHIC_24, GTextAlignmentLeft);
+#ifdef PBL_ROUND
+  // Centred, in from the edge; what the buttons do goes underneath, there being no room beside them.
+  int y = HEADER_H + 8;
+  int inset = layout_inset(bounds, y, 34, PAD);
+  s_title_layer = prv_text_layer(root, GRect(inset, y, bounds.size.w - inset * 2, 34), FONT_KEY_GOTHIC_28_BOLD, GTextAlignmentCenter);
+  y += 36;
+  // On the smaller round screen, one line, clear of what's underneath.
+  bool small = bounds.size.w <= SMALL_W;
+  int why_h = small ? 24 : 56;
+  inset = layout_inset(bounds, y, why_h, PAD);
+  s_why_layer = prv_text_layer(root, GRect(inset, y, bounds.size.w - inset * 2, why_h),
+                               small ? FONT_KEY_GOTHIC_18 : FONT_KEY_GOTHIC_24, GTextAlignmentCenter);
+  y = bounds.size.h - 62;
+  inset = layout_inset(bounds, y, 20, 0);
+  s_answer_layer = prv_text_layer(root, GRect(inset, y, bounds.size.w - inset * 2, 20), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentCenter);
+  text_layer_set_text(s_answer_layer, "Select: answer");
+  y += 20;
+  inset = layout_inset(bounds, y, 20, 0);
+  s_decline_layer = prv_text_layer(root, GRect(inset, y, bounds.size.w - inset * 2, 20), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentCenter);
+  text_layer_set_text(s_decline_layer, "Down: decline");
+#else
+  int w = bounds.size.w - PAD * 2;
+  if (bounds.size.w < SMALL_W) {
+    // One line of title, what it's for under it the whole width, and the labels below that.
+    s_title_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 2, w, 30), FONT_KEY_GOTHIC_24_BOLD, GTextAlignmentLeft);
+    s_why_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 32, w, 52), FONT_KEY_GOTHIC_24, GTextAlignmentLeft);
+  } else {
+    s_title_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 6, w, 64), FONT_KEY_GOTHIC_28_BOLD, GTextAlignmentLeft);
+    // Clear of the labels at the right.
+    s_why_layer = prv_text_layer(root, GRect(PAD, HEADER_H + 70, w - LABELS_W, 56), FONT_KEY_GOTHIC_24, GTextAlignmentLeft);
+  }
   // By the buttons they're for: Select (and Up) answer, Down declines.
-  s_answer_layer = prv_text_layer(root, GRect(PAD, bounds.size.h / 2 + 30, w, 24), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentRight);
+  s_answer_layer = prv_text_layer(root, GRect(PAD, bounds.size.h - 50, w, 24), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentRight);
   text_layer_set_text(s_answer_layer, "Answer");
-  s_decline_layer = prv_text_layer(root, GRect(PAD, bounds.size.h - 30, w, 24), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentRight);
+  s_decline_layer = prv_text_layer(root, GRect(PAD, bounds.size.h - 26, w, 24), FONT_KEY_GOTHIC_18_BOLD, GTextAlignmentRight);
   text_layer_set_text(s_decline_layer, "Decline");
+#endif
   text_layer_set_text_color(s_decline_layer, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorBlack));
   prv_redraw();
 }

@@ -457,6 +457,20 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 3. Docs: a README section ("Pebble watch: open the `.pbw` on your phone") and ticked ROADMAP items.
 4. Optionally, publish to the Pebble app store through the [developer dashboard](https://developer.repebble.com/dashboard).
 
+**Results (2026-10-28):**
+
+- (1) The watchapp builds for `basalt`, `chalk`, `diorite`, `emery`, `flint` and `gabbro`, every model with a microphone. `aplite`, the original Pebble, has none, so it's left out. It takes about 27 KB of RAM, leaving about 38 KB of heap on the 64 KB models.
+  - `layout.c` handles round screens:
+    - Each fixed row starts as far in as the screen's edge needs, and text is centred.
+    - The header is taller, and the status dot is left out because the line below it already says the same.
+    - Text in a scroll layer follows the screen's edge, a page at a time. The flow takes the layer's position when it's turned on, so it's turned on again each time the layer moves.
+  - On a 144-wide screen, the ring screen stacks its lines.
+  - The ringtone is played only where the speaker API exists (emery, flint, gabbro). Touch (emery, gabbro) and the glance are guarded by the SDK's API macros.
+  - Checked on the emulators for basalt, diorite, chalk, gabbro and emery. Long header titles are cut short on chalk's narrow top.
+- (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install latest`, then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `herald-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
+- (3) The README and ROADMAP cover the Pebble watch.
+- (4) Not done: publishing to the Pebble app store is for the maintainers to decide.
+
 ### Phase 6: stretch (each a spike first)
 
 - **Gateway voice on the speaker:** measure AppMessage throughput on the Time 2, transcode the TTS to 8 kHz/8-bit PCM on the phone, and stream it. Keep it only if it plays without stutter.

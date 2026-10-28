@@ -3,6 +3,7 @@
 #include "request.h"
 #include "ring.h"
 #include "dictate.h"
+#include "layout.h"
 
 // PebbleLink.MAX_REPLY_BYTES: the phone never sends more.
 #define MAX_REPLY 6000
@@ -11,7 +12,7 @@
 // While open, the phone's state is asked again this often (as the Wear watch does).
 #define STATUS_EVERY_MS 30000
 
-#define HEADER_H 30
+#define HEADER_H LAYOUT_HEADER_H
 #define ACTIVITY_H 24
 #define PAD 6
 // A quick launch opens straight into dictation, once the window is up.
@@ -129,6 +130,7 @@ static const char *prv_activity_line(void) {
   return s_has_turn ? "Select to reply" : "Select to talk";
 }
 
+#ifndef PBL_ROUND
 static GColor prv_dot(void) {
   switch (s_phone) {
     case PHONE_READY: return PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorWhite);
@@ -137,15 +139,13 @@ static GColor prv_dot(void) {
     default: return PBL_IF_COLOR_ELSE(GColorRed, GColorWhite);
   }
 }
+#endif
 
 static void prv_header_update(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, s_fill);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-  graphics_context_set_text_color(ctx, s_on_fill);
-  graphics_draw_text(ctx, s_chat_title[0] ? s_chat_title : "New chat", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                     GRect(PAD, 2, bounds.size.w - PAD * 2 - 14, HEADER_H - 4), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentLeft, NULL);
+  layout_draw_header(ctx, bounds, s_chat_title[0] ? s_chat_title : "New chat", s_fill, s_on_fill, 14);
+#ifndef PBL_ROUND
+  // The phone's state as a dot; a round header has no room for it, and the line below says it anyway.
   GColor dot = prv_dot();
   if (!gcolor_equal(dot, GColorClear)) {
     graphics_context_set_fill_color(ctx, dot);
@@ -153,6 +153,7 @@ static void prv_header_update(Layer *layer, GContext *ctx) {
     graphics_context_set_stroke_color(ctx, s_on_fill);
     graphics_draw_circle(ctx, GPoint(bounds.size.w - PAD - 4, HEADER_H / 2), 4);
   }
+#endif
 }
 
 // Sizes the said and reply text to what they hold, the reply below what was said.
@@ -160,17 +161,9 @@ static void prv_layout(void) {
   GRect bounds = layer_get_bounds(scroll_layer_get_layer(s_scroll_layer));
   int w = bounds.size.w - PAD * 2;
   int y = 4;
-  if (s_said[0]) {
-    text_layer_set_size(s_said_layer, GSize(w, 2000));
-    int h = text_layer_get_content_size(s_said_layer).h + 4;
-    layer_set_frame(text_layer_get_layer(s_said_layer), GRect(PAD, y, w, h));
-    y += h + 4;
-  } else {
-    layer_set_frame(text_layer_get_layer(s_said_layer), GRect(PAD, y, w, 0));
-  }
-  layer_set_frame(text_layer_get_layer(s_reply_layer), GRect(PAD, y, w, 2000));
-  int h = text_layer_get_content_size(s_reply_layer).h + 6;
-  layer_set_frame(text_layer_get_layer(s_reply_layer), GRect(PAD, y, w, h));
+  int said = layout_fit(s_said_layer, s_scroll_layer, PAD, y, w);
+  if (said) y += said + 2;
+  int h = layout_fit(s_reply_layer, s_scroll_layer, PAD, y, w);
   scroll_layer_set_content_size(s_scroll_layer, GSize(bounds.size.w, y + h + 12));
 }
 
@@ -475,8 +468,10 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_header_layer, prv_header_update);
   layer_add_child(root, s_header_layer);
 
-  s_activity_layer = text_layer_create(GRect(PAD, HEADER_H, bounds.size.w - PAD * 2, ACTIVITY_H));
+  int inset = layout_inset(bounds, HEADER_H, ACTIVITY_H, PAD);
+  s_activity_layer = text_layer_create(GRect(inset, HEADER_H, bounds.size.w - inset * 2, ACTIVITY_H));
   text_layer_set_font(s_activity_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_text_alignment(s_activity_layer, LAYOUT_ALIGN);
   text_layer_set_overflow_mode(s_activity_layer, GTextOverflowModeTrailingEllipsis);
   layer_add_child(root, text_layer_get_layer(s_activity_layer));
 

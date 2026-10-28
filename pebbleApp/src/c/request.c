@@ -1,10 +1,11 @@
 #include "request.h"
 #include "dictate.h"
+#include "layout.h"
 
 // PebbleLink.MAX_CHOICES and the byte limits it clips to.
 #define MAX_CHOICES 6
 #define PAD 6
-#define HEADER_H 30
+#define HEADER_H LAYOUT_HEADER_H
 #define STATUS_H 24
 
 static Window *s_window;
@@ -39,13 +40,7 @@ static const char *prv_status_line(void) {
 }
 
 static void prv_header_update(Layer *layer, GContext *ctx) {
-  GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, s_fill);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-  graphics_context_set_text_color(ctx, s_on_fill);
-  graphics_draw_text(ctx, s_heading, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                     GRect(PAD, 2, bounds.size.w - PAD * 2, HEADER_H - 4), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentLeft, NULL);
+  layout_draw_header(ctx, layer_get_bounds(layer), s_heading, s_fill, s_on_fill, 0);
 }
 
 static void prv_redraw(void) {
@@ -62,9 +57,7 @@ static void prv_redraw(void) {
   text_layer_set_text(s_detail_layer, body);
   GRect bounds = layer_get_bounds(scroll_layer_get_layer(s_scroll_layer));
   int w = bounds.size.w - PAD * 2;
-  layer_set_frame(text_layer_get_layer(s_detail_layer), GRect(PAD, 4, w, 2000));
-  int h = text_layer_get_content_size(s_detail_layer).h + 6;
-  layer_set_frame(text_layer_get_layer(s_detail_layer), GRect(PAD, 4, w, h));
+  int h = layout_fit(s_detail_layer, s_scroll_layer, PAD, 4, w);
   scroll_layer_set_content_size(s_scroll_layer, GSize(bounds.size.w, h + 16));
 }
 
@@ -118,8 +111,10 @@ static void prv_load(Window *window) {
   layer_set_update_proc(s_header_layer, prv_header_update);
   layer_add_child(root, s_header_layer);
 
-  s_status_layer = text_layer_create(GRect(PAD, HEADER_H, bounds.size.w - PAD * 2, STATUS_H));
+  int inset = layout_inset(bounds, HEADER_H, STATUS_H, PAD);
+  s_status_layer = text_layer_create(GRect(inset, HEADER_H, bounds.size.w - inset * 2, STATUS_H));
   text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_text_alignment(s_status_layer, LAYOUT_ALIGN);
   text_layer_set_overflow_mode(s_status_layer, GTextOverflowModeTrailingEllipsis);
   layer_add_child(root, text_layer_get_layer(s_status_layer));
 
