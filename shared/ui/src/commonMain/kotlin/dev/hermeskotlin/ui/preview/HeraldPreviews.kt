@@ -109,6 +109,7 @@ import dev.hermeskotlin.ui.chat.GreetingPlaces
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.AppIconScreen
+import dev.hermeskotlin.ui.settings.ConnectedDevicesView
 import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
@@ -163,6 +164,7 @@ enum class PreviewScene(val label: String) {
     AppIcons("The app icons"),
     StartInstruction("The starting instruction for new chats"),
     SidebarPages("The sidebar's page buttons, a few hidden"),
+    ConnectedDevices("Connected devices: the Pebble and its prompts"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
@@ -633,6 +635,11 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onUpdate = {},
                     onBack = {},
                 )
+                PreviewScene.ConnectedDevices -> ConnectedDevicesView(
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow, pebbleAnswers = true),
+                    onUpdate = {},
+                    onBack = {},
+                )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
@@ -856,6 +863,10 @@ private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruct
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarPagesPreview() = HeraldPreview(PreviewScene.SidebarPages)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ConnectedDevicesPreview() = HeraldPreview(PreviewScene.ConnectedDevices)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
